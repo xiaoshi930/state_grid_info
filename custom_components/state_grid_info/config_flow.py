@@ -431,13 +431,22 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # 月阶梯峰平谷_变动价格
         elif current_standard == BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格:
             # 为12个月的3个阶梯的谷电价创建36个输入字段
-            # 以及全年的尖、峰、平单价
+            # 以及全年的3阶梯尖、峰、平单价
             schema = {
                 vol.Required(CONF_LADDER_LEVEL_1, default=180): cv.positive_float,
                 vol.Required(CONF_LADDER_LEVEL_2, default=280): cv.positive_float,
-                vol.Required(CONF_PRICE_TIP, default=0.5224): cv.positive_float,
-                vol.Required(CONF_PRICE_PEAK, default=0.6224): cv.positive_float,
-                vol.Required(CONF_PRICE_FLAT, default=0.8224): cv.positive_float,
+                # 第一阶梯价格
+                vol.Required(f"{CONF_LADDER_PRICE_1}_{CONF_PRICE_TIP}", default=0.5224): cv.positive_float,
+                vol.Required(f"{CONF_LADDER_PRICE_1}_{CONF_PRICE_PEAK}", default=0.6224): cv.positive_float,
+                vol.Required(f"{CONF_LADDER_PRICE_1}_{CONF_PRICE_FLAT}", default=0.8224): cv.positive_float,
+                # 第二阶梯价格
+                vol.Required(f"{CONF_LADDER_PRICE_2}_{CONF_PRICE_TIP}", default=0.5224): cv.positive_float,
+                vol.Required(f"{CONF_LADDER_PRICE_2}_{CONF_PRICE_PEAK}", default=0.6224): cv.positive_float,
+                vol.Required(f"{CONF_LADDER_PRICE_2}_{CONF_PRICE_FLAT}", default=0.8224): cv.positive_float,
+                # 第三阶梯价格
+                vol.Required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_TIP}", default=0.5224): cv.positive_float,
+                vol.Required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_PEAK}", default=0.6224): cv.positive_float,
+                vol.Required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_FLAT}", default=0.8224): cv.positive_float,
                 
                 # 1月份的三个阶梯谷电价
                 vol.Required(f"month_01_ladder_1_valley", default=0.2535): cv.positive_float,

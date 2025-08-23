@@ -46,7 +46,7 @@ button: button.qinglong     # 刷新按钮
 title: 电费信息              # 标题，默认电费信息
 titleFontSize: 20px         # 标题字体大小
 theme: "off"                # 选项on是白色，选项off是黑色，也可以引用全局函数：'[[[ return theme()]]]'
-height: 330px               # 总高度
+height: 300px               # 总高度
 width: 380px                # 总宽度
 border: 10px                # 圆角大小
 cardwidth: 70px             # 每个按钮宽度
@@ -67,7 +67,7 @@ balance_name: '电费余额'     # 电费余额的名字
 type: custom:state-grid-chart-day
 entity: sensor.state_grid   # 集成实体
 theme: "off"                # 选项on是白色，选项off是黑色，也可以引用全局函数：'[[[ return theme()]]]'
-height: 330px               # 总高度
+height: 300px               # 总高度
 width: 380px                # 总宽度
 color_num: '#0fccc3'        # 电量颜色，默认值：'#0fccc3'
 color_cost: '#804aff'       # 电费颜色，默认值：'#804aff'
@@ -79,7 +79,7 @@ color_cost: '#804aff'       # 电费颜色，默认值：'#804aff'
 type: custom:state-grid-chart-month
 entity: sensor.state_grid   # 集成实体
 theme: "off"                # 选项on是白色，选项off是黑色，也可以引用全局函数：'[[[ return theme()]]]'
-height: 330px               # 总高度
+height: 300px               # 总高度
 width: 380px                # 总宽度
 color_num: '#0fccc3'        # 电量颜色，默认值：'#0fccc3'
 color_cost: '#804aff'       # 电费颜色，默认值：'#804aff'
@@ -91,7 +91,7 @@ color_cost: '#804aff'       # 电费颜色，默认值：'#804aff'
 type: custom:state-grid-phone
 entity: sensor.state_grid   # 集成实体
 theme: "off"                # 选项on是白色，选项off是黑色，也可以引用全局函数：'[[[ return theme()]]]'
-height: 330px               # 总高度
+height: 300px               # 总高度
 width: 380px                # 总宽度
 color_num: '#0fccc3'        # 电量颜色，默认值：'#0fccc3'
 color_cost: '#804aff'       # 电费颜色，默认值：'#804aff'
@@ -103,7 +103,7 @@ color_cost: '#804aff'       # 电费颜色，默认值：'#804aff'
 type: custom:state-grid-pad
 entity: sensor.state_grid   # 集成实体
 theme: "off"                # 选项on是白色，选项off是黑色，也可以引用全局函数：'[[[ return theme()]]]'
-height: 330px               # 总高度
+height: 300px               # 总高度
 width: 380px                # 总宽度
 color_num: '#0fccc3'        # 电量颜色，默认值：'#0fccc3'
 color_cost: '#804aff'       # 电费颜色，默认值：'#804aff'

@@ -1,0 +1,11 @@
+{
+  "domain": "state_grid_info",
+  "name": "国家电网辅助信息",
+  "codeowners": ["xiaoshi930"],
+  "config_flow": true,
+  "documentation": "https://github.com/xiaoshi930/state_grid_info",
+  "iot_class": "cloud_polling",
+  "version": "1.0",
+  "after_dependencies": ["mqtt"], 
+  "startup_after": ["mqtt"] 
+}

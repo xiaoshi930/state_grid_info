@@ -1,0 +1,184 @@
+{
+  "config": {
+    "step": {
+      "data_source": {
+        "title": "Select Data Source",
+        "description": "Please select the source of State Grid data",
+        "data": {
+          "data_source": "Data Source"
+        }
+      },
+      "hassbox_consumer": {
+        "title": "Select Consumer Number",
+        "description": "Please select the State Grid consumer number to use",
+        "data": {
+          "consumer_number": "Consumer Number"
+        }
+      },
+      "qinglong_mqtt": {
+        "title": "MQTT Configuration",
+        "description": "Please enter MQTT server information and State Grid ID",
+        "data": {
+          "mqtt_host": "MQTT Server",
+          "mqtt_port": "MQTT Port",
+          "mqtt_username": "MQTT Username",
+          "mqtt_password": "MQTT Password",
+          "state_grid_id": "State Grid ID"
+        }
+      },
+      "billing_type": {
+        "title": "Select Billing Type",
+        "description": "Please select the electricity billing type",
+        "data": {
+          "billing_type": "Billing Type"
+        }
+      },
+      "segmented_billing": {
+        "title": "Segmented Billing Configuration",
+        "description": "Please configure segmented billing information",
+        "data": {
+          "segment_date": "Segment Date (Format: YYYYMM, e.g., 202501)",
+          "segment_before_standard": "Billing Standard Before Segment",
+          "segment_after_standard": "Billing Standard After Segment"
+        }
+      },
+      "billing_standard": {
+        "title": "Select Billing Standard",
+        "description": "Please select the electricity billing standard",
+        "data": {
+          "billing_standard": "Billing Standard"
+        }
+      },
+      "billing_standard_config": {
+        "title": "{segment}{standard} Configuration",
+        "description": "Please configure detailed parameters for {segment}{standard}",
+        "data": {
+          "ladder_level_1": "First Ladder Level (kWh)",
+          "ladder_level_2": "Second Ladder Level (kWh)",
+          "ladder_price_1": "First Ladder Price (CNY/kWh)",
+          "ladder_price_2": "Second Ladder Price (CNY/kWh)",
+          "ladder_price_3": "Third Ladder Price (CNY/kWh)",
+          "year_ladder_start": "Year Ladder Start Date (Format: MMDD, e.g., 0101)",
+          "ladder_price_1_price_tip": "First Ladder Tip Price (CNY/kWh)",
+          "ladder_price_1_price_peak": "First Ladder Peak Price (CNY/kWh)",
+          "ladder_price_1_price_flat": "First Ladder Flat Price (CNY/kWh)",
+          "ladder_price_1_price_valley": "First Ladder Valley Price (CNY/kWh)",
+          "ladder_price_2_price_tip": "Second Ladder Tip Price (CNY/kWh)",
+          "ladder_price_2_price_peak": "Second Ladder Peak Price (CNY/kWh)",
+          "ladder_price_2_price_flat": "Second Ladder Flat Price (CNY/kWh)",
+          "ladder_price_2_price_valley": "Second Ladder Valley Price (CNY/kWh)",
+          "ladder_price_3_price_tip": "Third Ladder Tip Price (CNY/kWh)",
+          "ladder_price_3_price_peak": "Third Ladder Peak Price (CNY/kWh)",
+          "ladder_price_3_price_flat": "Third Ladder Flat Price (CNY/kWh)",
+          "ladder_price_3_price_valley": "Third Ladder Valley Price (CNY/kWh)",
+          "price_tip": "Tip Price (CNY/kWh)",
+          "price_peak": "Peak Price (CNY/kWh)",
+          "price_flat": "Flat Price (CNY/kWh)",
+          "price_valley": "Valley Price (CNY/kWh)",
+          "month_prices": "Monthly Prices (36 comma-separated prices, CNY/kWh)",
+          "average_price": "Average Price (CNY/kWh)",
+          "month_01_ladder_1_valley": "January First Ladder Valley Price (CNY/kWh)",
+          "month_01_ladder_2_valley": "January Second Ladder Valley Price (CNY/kWh)",
+          "month_01_ladder_3_valley": "January Third Ladder Valley Price (CNY/kWh)",
+          "month_02_ladder_1_valley": "February First Ladder Valley Price (CNY/kWh)",
+          "month_02_ladder_2_valley": "February Second Ladder Valley Price (CNY/kWh)",
+          "month_02_ladder_3_valley": "February Third Ladder Valley Price (CNY/kWh)",
+          "month_03_ladder_1_valley": "March First Ladder Valley Price (CNY/kWh)",
+          "month_03_ladder_2_valley": "March Second Ladder Valley Price (CNY/kWh)",
+          "month_03_ladder_3_valley": "March Third Ladder Valley Price (CNY/kWh)",
+          "month_04_ladder_1_valley": "April First Ladder Valley Price (CNY/kWh)",
+          "month_04_ladder_2_valley": "April Second Ladder Valley Price (CNY/kWh)",
+          "month_04_ladder_3_valley": "April Third Ladder Valley Price (CNY/kWh)",
+          "month_05_ladder_1_valley": "May First Ladder Valley Price (CNY/kWh)",
+          "month_05_ladder_2_valley": "May Second Ladder Valley Price (CNY/kWh)",
+          "month_05_ladder_3_valley": "May Third Ladder Valley Price (CNY/kWh)",
+          "month_06_ladder_1_valley": "June First Ladder Valley Price (CNY/kWh)",
+          "month_06_ladder_2_valley": "June Second Ladder Valley Price (CNY/kWh)",
+          "month_06_ladder_3_valley": "June Third Ladder Valley Price (CNY/kWh)",
+          "month_07_ladder_1_valley": "July First Ladder Valley Price (CNY/kWh)",
+          "month_07_ladder_2_valley": "July Second Ladder Valley Price (CNY/kWh)",
+          "month_07_ladder_3_valley": "July Third Ladder Valley Price (CNY/kWh)",
+          "month_08_ladder_1_valley": "August First Ladder Valley Price (CNY/kWh)",
+          "month_08_ladder_2_valley": "August Second Ladder Valley Price (CNY/kWh)",
+          "month_08_ladder_3_valley": "August Third Ladder Valley Price (CNY/kWh)",
+          "month_09_ladder_1_valley": "September First Ladder Valley Price (CNY/kWh)",
+          "month_09_ladder_2_valley": "September Second Ladder Valley Price (CNY/kWh)",
+          "month_09_ladder_3_valley": "September Third Ladder Valley Price (CNY/kWh)",
+          "month_10_ladder_1_valley": "October First Ladder Valley Price (CNY/kWh)",
+          "month_10_ladder_2_valley": "October Second Ladder Valley Price (CNY/kWh)",
+          "month_10_ladder_3_valley": "October Third Ladder Valley Price (CNY/kWh)",
+          "month_11_ladder_1_valley": "November First Ladder Valley Price (CNY/kWh)",
+          "month_11_ladder_2_valley": "November Second Ladder Valley Price (CNY/kWh)",
+          "month_11_ladder_3_valley": "November Third Ladder Valley Price (CNY/kWh)",
+          "month_12_ladder_1_valley": "December First Ladder Valley Price (CNY/kWh)",
+          "month_12_ladder_2_valley": "December Second Ladder Valley Price (CNY/kWh)",
+          "month_12_ladder_3_valley": "December Third Ladder Valley Price (CNY/kWh)"
+        }
+      },
+      "before_segment_config": {
+        "title": "Before Segment {standard} Configuration",
+        "description": "Please configure detailed parameters for {standard} before segment",
+        "data": {
+          "ladder_level_1": "First Ladder Level (kWh)",
+          "ladder_level_2": "Second Ladder Level (kWh)",
+          "ladder_price_1": "First Ladder Price (CNY/kWh)",
+          "ladder_price_2": "Second Ladder Price (CNY/kWh)",
+          "ladder_price_3": "Third Ladder Price (CNY/kWh)",
+          "year_ladder_start": "Year Ladder Start Date (Format: MMDD, e.g., 0101)"
+        }
+      },
+      "after_segment_config": {
+        "title": "After Segment {standard} Configuration",
+        "description": "Please configure detailed parameters for {standard} after segment",
+        "data": {
+          "ladder_level_1": "First Ladder Level (kWh)",
+          "ladder_level_2": "Second Ladder Level (kWh)",
+          "ladder_price_1": "First Ladder Price (CNY/kWh)",
+          "ladder_price_2": "Second Ladder Price (CNY/kWh)",
+          "ladder_price_3": "Third Ladder Price (CNY/kWh)",
+          "year_ladder_start": "Year Ladder Start Date (Format: MMDD, e.g., 0101)"
+        }
+      }
+    },
+    "error": {
+      "hassbox_config_not_found": "HassBox configuration file not found. Please ensure HassBox integration is installed and configured",
+      "hassbox_config_error": "Error reading HassBox configuration file. Please check if the file format is correct",
+      "mqtt_connection_error": "MQTT connection failed. Please check server address and credentials"
+    },
+    "abort": {
+      "already_configured": "This consumer number is already configured"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "state_grid_info": {
+        "name": "State Grid Info",
+        "state_attributes": {
+          "date": "Update Date",
+          "balance": "Account Balance",
+          "dayList": "Daily Electricity Data",
+          "monthList": "Monthly Electricity Data",
+          "yearList": "Yearly Electricity Data",
+          "dayEleNum": "Daily Electricity Usage",
+          "dayEleCost": "Daily Electricity Cost",
+          "dayTPq": "Daily Tip Period Usage",
+          "dayPPq": "Daily Peak Period Usage",
+          "dayNPq": "Daily Flat Period Usage",
+          "dayVPq": "Daily Valley Period Usage",
+          "monthEleNum": "Monthly Electricity Usage",
+          "monthEleCost": "Monthly Electricity Cost",
+          "monthTPq": "Monthly Tip Period Usage",
+          "monthPPq": "Monthly Peak Period Usage",
+          "monthNPq": "Monthly Flat Period Usage",
+          "monthVPq": "Monthly Valley Period Usage",
+          "yearEleNum": "Yearly Electricity Usage",
+          "yearEleCost": "Yearly Electricity Cost",
+          "yearTPq": "Yearly Tip Period Usage",
+          "yearPPq": "Yearly Peak Period Usage",
+          "yearNPq": "Yearly Flat Period Usage",
+          "yearVPq": "Yearly Valley Period Usage"
+        }
+      }
+    }
+  }
+}

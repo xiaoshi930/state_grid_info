@@ -22,7 +22,6 @@
 2、青龙脚本发送的mqtt消息：多户号tate-grid-multiple.js（https://github.com/x2rr/state-grid）  
 
 ## 配套UI卡片
-![image](https://github.com/xiaoshi930/state_grid_info/blob/879aa30e4242a48a2032c459e6e126d16dbfc308/picture/b8acd60ecba292966016b8120a090b0.png)  
 <img width="1343" height="1062" alt="b8acd60ecba292966016b8120a090b0" src="https://github.com/user-attachments/assets/edd70f5c-b2a2-4e86-b27c-aefe0058d460" />
 
 ### 功能1：国网日历

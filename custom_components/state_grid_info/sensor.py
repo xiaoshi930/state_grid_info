@@ -2,7 +2,7 @@
 import logging
 import json
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 import paho.mqtt.client as mqtt
 
 from homeassistant.components.sensor import SensorEntity

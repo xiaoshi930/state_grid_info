@@ -40,6 +40,15 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._data = {}
         self._consumer_numbers = []
         self._hassbox_data = None
+        
+    def _read_config_file(self, config_path):
+        """在执行器中读取配置文件。"""
+        try:
+            with open(config_path, "r", encoding="utf-8") as file:
+                return json.load(file)
+        except Exception as ex:
+            _LOGGER.error("读取配置文件时出错: %s", ex)
+            return None
 
     #处理配置流程的初始步骤
     async def async_step_user(self, user_input=None):
@@ -76,18 +85,20 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # 读取HassBox配置文件
                 config_path = self.hass.config.path(".storage", "state_grid.config")
                 if os.path.exists(config_path):
-                    with open(config_path, "r", encoding="utf-8") as file:
-                        config_data = json.load(file)
-                        self._hassbox_data = config_data
-                        
-                        if "data" in config_data and "powerUserList" in config_data["data"]:
-                            power_user_list = config_data["data"]["powerUserList"]
-                            for i, user in enumerate(power_user_list):
-                                if "consNo_dst" in user:
-                                    self._consumer_numbers.append({
-                                        "index": i,
-                                        "number": user["consNo_dst"]
-                                    })
+                    # 使用异步方式读取文件
+                    config_data = await self.hass.async_add_executor_job(
+                        self._read_config_file, config_path
+                    )
+                    self._hassbox_data = config_data
+                    
+                    if "data" in config_data and "powerUserList" in config_data["data"]:
+                        power_user_list = config_data["data"]["powerUserList"]
+                        for i, user in enumerate(power_user_list):
+                            if "consNo_dst" in user:
+                                self._consumer_numbers.append({
+                                    "index": i,
+                                    "number": user["consNo_dst"]
+                                })
                 else:
                     errors["base"] = "hassbox_config_not_found"
             except Exception as ex:

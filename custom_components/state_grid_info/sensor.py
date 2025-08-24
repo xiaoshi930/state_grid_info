@@ -212,27 +212,13 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
             
             if self.config.get(CONF_DATA_SOURCE) == DATA_SOURCE_HASSBOX:
                 # 每次都重新从文件读取最新数据
-                _LOGGER.info("从HassBox配置文件重新读取数据")
-                
                 # 强制刷新标志 - 如果超过10分钟没有更新，强制刷新
                 force_refresh = time_diff.total_seconds() > 600  # 10分钟
                 if force_refresh:
-                    _LOGGER.warning("已超过10分钟未更新数据，强制刷新")
+                    _LOGGER.info("已超过10分钟未更新数据，强制刷新")
                 
                 # 使用异步执行器运行文件读取操作
                 hassbox_data = await self.hass.async_add_executor_job(self._fetch_hassbox_data)
-                
-                # 检查数据是否有效
-                if not hassbox_data:
-                    _LOGGER.warning("HassBox数据为空，可能配置文件不存在或格式错误")
-                    
-                    # 如果数据为空但之前有数据，保留旧数据但标记为过期
-                    if self.data:
-                        _LOGGER.info("保留旧数据但标记为过期")
-                        # 设置过期标志
-                        self.data["data_expired"] = True
-                        return self.data
-                    return {}
                 
                 # 更新数据时间戳
                 self.last_update_time = current_time
@@ -240,8 +226,11 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 # 清除过期标志
                 if isinstance(hassbox_data, dict):
                     hassbox_data["data_expired"] = False
-                    
+                
+                # 更新 self.data
+                self.data = hassbox_data  
                 return hassbox_data
+
             elif self.config.get(CONF_DATA_SOURCE) == DATA_SOURCE_QINGLONG:
                 # 对于MQTT，检查连接状态并尝试重新连接
                 if not self.mqtt_client:
@@ -261,7 +250,7 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 
                 # 如果数据为空或者数据过期（超过30分钟），返回空数据触发错误状态
                 if not self.data or (time_diff.total_seconds() > 1800):  # 30分钟
-                    _LOGGER.warning("数据为空或已过期，返回空数据")
+                    _LOGGER.info("数据为空或已过期，返回空数据")
                     return {}
                 
                 return self.data
@@ -457,8 +446,25 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
             # 取最新的370个数据（总数大概370-390波动）
             daylist7 = list(reversed(daylist6))[:370]
             
+            # 先创建一个临时数据结构，用于计算电费
+            # 这样可以确保在计算电费时 self.data 不为 None
+            temp_data = {
+                "date": power_user_data.get("refresh_time", ""),
+                "balance": float(power_user_data.get("balance", 0)),
+                "dayList": daylist7,
+            }
+            
+            # 临时保存当前的 self.data
+            original_data = self.data
+            
+            # 设置临时数据用于计算
+            self.data = temp_data
+            
             # 计算每日电费
             dayList = self._calculate_daily_cost(daylist7)
+            
+            # 恢复原始数据
+            self.data = original_data
             
             # 重写月用电结构
             monthList = []
@@ -510,8 +516,25 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                     "dayVPq": float(item.get("thisVPq", 0)),
                 })
             
+            # 先创建一个临时数据结构，用于计算电费
+            # 这样可以确保在计算电费时 self.data 不为 None
+            temp_data = {
+                "date": payload.get("date", ""),
+                "balance": float(payload.get("sumMoney", 0)),
+                "dayList": dayList7,
+            }
+            
+            # 临时保存当前的 self.data
+            original_data = self.data
+            
+            # 设置临时数据用于计算
+            self.data = temp_data
+            
             # 计算每日电费
             dayList = self._calculate_daily_cost(dayList7)
+            
+            # 恢复原始数据
+            self.data = original_data
             
             # 处理月数据
             monthList_ori = payload.get("monthList", [])
@@ -594,12 +617,18 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 # 获取当前年份
                 current_year = day_data["day"].split("-")[0]
                 
+                # 获取年阶梯起始日期（默认为当年1月1日）
+                year_ladder_start = self.config.get(f"{prefix}{CONF_YEAR_LADDER_START}", f"0101")
+                year_ladder_start_date = current_year + "-" + year_ladder_start[:2] + "-" + year_ladder_start[2:]
+                
                 # 计算当年累计用电量（包括当天）
                 year_accumulated = 0
                 if self.data is not None:
                     for data in self.data.get("dayList", []):
-                        if data["day"].startswith(current_year):
+                        # 只计算起始日期之后的用电量
+                        if data["day"] >= year_ladder_start_date and data["day"].startswith(current_year):
                             year_accumulated += data["dayEleNum"]
+                _LOGGER.debug("年阶梯计费处理后日期: %s, 当年累计用电量: %.2f", year_ladder_start_date, year_accumulated)
                 
                 # 根据累计用电量计算阶梯电价
                 if year_accumulated <= ladder_level_1:
@@ -664,12 +693,18 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 # 获取当前年份
                 current_year = day_data["day"].split("-")[0]
                 
+                # 获取年阶梯起始日期（默认为当年1月1日）
+                year_ladder_start = self.config.get(f"{prefix}{CONF_YEAR_LADDER_START}", f"0101")
+                year_ladder_start_date = current_year + "-" + year_ladder_start[:2] + "-" + year_ladder_start[2:]
+                
                 # 计算当年累计用电量（包括当天）
                 year_accumulated = 0
                 if self.data is not None:
                     for data in self.data.get("dayList", []):
-                        if data["day"].startswith(current_year):
+                        # 只计算起始日期之后的用电量
+                        if data["day"] >= year_ladder_start_date and data["day"].startswith(current_year):
                             year_accumulated += data["dayEleNum"]
+                _LOGGER.debug("年阶梯计费处理后日期: %s, 当年累计用电量: %.2f", year_ladder_start_date, year_accumulated)
                 
                 # 根据累计用电量确定当前阶梯
                 if year_accumulated <= ladder_level_1:
@@ -771,9 +806,9 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 month_accumulated = 0
                 if self.data is not None:
                     for data in self.data.get("dayList", []):
-                        if data["day"].startswith(current_year_month):
+                        if data["day"].startswith(current_year_month): 
                             month_accumulated += data["dayEleNum"]
-                
+            
                 # 根据累计用电量计算阶梯电价
                 if month_accumulated <= ladder_level_1:
                     # 第一阶梯
@@ -937,17 +972,17 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 # 各阶梯的尖峰平谷电价
                 # 第一阶梯
                 price_tip_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_TIP}", 0.5224)
-                price_peak_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_PEAK}", 0.6224)
-                price_flat_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_FLAT}", 0.8224)
+                price_peak_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_PEAK}", 0.5224)
+                price_flat_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_FLAT}", 0.5224)
                 
                 # 第二阶梯
-                price_tip_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_TIP}", 0.5224)
+                price_tip_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_TIP}", 0.6224)
                 price_peak_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_PEAK}", 0.6224)
-                price_flat_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_FLAT}", 0.8224)
+                price_flat_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_FLAT}", 0.6224)
                 
                 # 第三阶梯
-                price_tip_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_TIP}", 0.5224)
-                price_peak_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_PEAK}", 0.6224)
+                price_tip_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_TIP}", 0.8224)
+                price_peak_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_PEAK}", 0.8224)
                 price_flat_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_FLAT}", 0.8224)
                 
                 # 获取当前日期信息

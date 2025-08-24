@@ -621,14 +621,14 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 year_ladder_start = self.config.get(f"{prefix}{CONF_YEAR_LADDER_START}", f"0101")
                 year_ladder_start_date = current_year + "-" + year_ladder_start[:2] + "-" + year_ladder_start[2:]
                 
-                # 计算当年累计用电量（包括当天）
+                # 计算当年累计用电量（截至当前日期）
                 year_accumulated = 0
+                current_day = day_data["day"]
                 if self.data is not None:
                     for data in self.data.get("dayList", []):
-                        # 只计算起始日期之后的用电量
-                        if data["day"] >= year_ladder_start_date and data["day"].startswith(current_year):
+                        # 只计算起始日期之后且不超过当前日期的用电量
+                        if data["day"] >= year_ladder_start_date and data["day"] <= current_day and data["day"].startswith(current_year):
                             year_accumulated += data["dayEleNum"]
-                _LOGGER.debug("年阶梯计费处理后日期: %s, 当年累计用电量: %.2f", year_ladder_start_date, year_accumulated)
                 
                 # 根据累计用电量计算阶梯电价
                 if year_accumulated <= ladder_level_1:
@@ -697,15 +697,15 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 year_ladder_start = self.config.get(f"{prefix}{CONF_YEAR_LADDER_START}", f"0101")
                 year_ladder_start_date = current_year + "-" + year_ladder_start[:2] + "-" + year_ladder_start[2:]
                 
-                # 计算当年累计用电量（包括当天）
+                # 计算当年累计用电量（截至当前日期）
                 year_accumulated = 0
+                current_day = day_data["day"]
                 if self.data is not None:
                     for data in self.data.get("dayList", []):
-                        # 只计算起始日期之后的用电量
-                        if data["day"] >= year_ladder_start_date and data["day"].startswith(current_year):
+                        # 只计算起始日期之后且不超过当前日期的用电量
+                        if data["day"] >= year_ladder_start_date and data["day"] <= current_day and data["day"].startswith(current_year):
                             year_accumulated += data["dayEleNum"]
-                _LOGGER.debug("年阶梯计费处理后日期: %s, 当年累计用电量: %.2f", year_ladder_start_date, year_accumulated)
-                
+
                 # 根据累计用电量确定当前阶梯
                 if year_accumulated <= ladder_level_1:
                     # 第一阶梯
@@ -802,11 +802,12 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 # 获取当前年月
                 current_year_month = day_data["day"][:7]  # 格式：YYYY-MM
                 
-                # 计算当月累计用电量（包括当天）
+                # 计算当月累计用电量（截至当前日期）
                 month_accumulated = 0
+                current_day = day_data["day"]
                 if self.data is not None:
                     for data in self.data.get("dayList", []):
-                        if data["day"].startswith(current_year_month): 
+                        if data["day"].startswith(current_year_month) and data["day"] <= current_day: 
                             month_accumulated += data["dayEleNum"]
             
                 # 根据累计用电量计算阶梯电价
@@ -872,11 +873,12 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 # 获取当前年月
                 current_year_month = day_data["day"][:7]  # 格式：YYYY-MM
                 
-                # 计算当月累计用电量（包括当天）
+                # 计算当月累计用电量（截至当前日期）
                 month_accumulated = 0
+                current_day = day_data["day"]
                 if self.data is not None:
                     for data in self.data.get("dayList", []):
-                        if data["day"].startswith(current_year_month):
+                        if data["day"].startswith(current_year_month) and data["day"] <= current_day: 
                             month_accumulated += data["dayEleNum"]
                 
                 # 根据累计用电量确定当前阶梯
@@ -995,13 +997,14 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 valley_price_2 = self.config.get(f"{prefix}month_{month:02d}_ladder_2_valley", 0.3535)
                 valley_price_3 = self.config.get(f"{prefix}month_{month:02d}_ladder_3_valley", 0.5535)
                 
-                # 计算当月累计用电量（包括当天）
+                # 计算当月累计用电量（截至当前日期）
                 month_accumulated = 0
+                current_day = day_data["day"]
                 if self.data is not None:
                     for data in self.data.get("dayList", []):
-                        if data["day"].startswith(current_year_month):
+                        if data["day"].startswith(current_year_month) and data["day"] <= current_day: 
                             month_accumulated += data["dayEleNum"]
-                
+
                 # 根据累计用电量确定当前阶梯
                 if month_accumulated <= ladder_level_1:
                     # 第一阶梯

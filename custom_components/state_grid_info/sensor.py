@@ -45,6 +45,11 @@ async def async_setup_entry(
     
     # 创建传感器实体，确保实体ID包含用户的电力户号
     sensor = StateGridInfoSensor(coordinator, config)
+    
+    # 存储实体以便在卸载时访问
+    if DOMAIN in hass.data and entry.entry_id in hass.data[DOMAIN]:
+        hass.data[DOMAIN][entry.entry_id]["entities"] = [sensor]
+    
     async_add_entities([sensor], True)
 
 
@@ -62,6 +67,7 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
         self.config = config
         self.data = None
         self.mqtt_client = None
+        self.last_update_time = datetime.now()
         self._setup_data_source()
 
     def _setup_data_source(self):
@@ -76,53 +82,189 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
     def _setup_mqtt_client(self):
         """Set up MQTT client for Qinglong script data source."""
         try:
-            client = mqtt.Client()
-            client.username_pw_set(
-                self.config.get(CONF_MQTT_USERNAME),
-                self.config.get(CONF_MQTT_PASSWORD)
-            )
+            # 如果已有客户端，先停止并断开连接
+            if self.mqtt_client:
+                try:
+                    self.mqtt_client.loop_stop()
+                    self.mqtt_client.disconnect()
+                    _LOGGER.info("断开旧的MQTT连接")
+                except Exception as ex:
+                    _LOGGER.warning("断开旧MQTT连接时出错: %s", ex)
+            
+            # 创建新的MQTT客户端，使用随机客户端ID避免冲突
+            client_id = f"state_grid_client_{self.config.get(CONF_STATE_GRID_ID)}_{int(datetime.now().timestamp())}"
+            client = mqtt.Client(client_id=client_id, clean_session=True)
+            
+            # 设置认证信息
+            if self.config.get(CONF_MQTT_USERNAME) and self.config.get(CONF_MQTT_PASSWORD):
+                client.username_pw_set(
+                    self.config.get(CONF_MQTT_USERNAME),
+                    self.config.get(CONF_MQTT_PASSWORD)
+                )
+            
+            # 设置回调函数
             client.on_connect = self._on_mqtt_connect
             client.on_message = self._on_mqtt_message
+            client.on_disconnect = self._on_mqtt_disconnect
+            
+            # 设置自动重连
+            client.reconnect_delay_set(min_delay=1, max_delay=120)
             
             # 连接MQTT服务器
-            client.connect(
-                self.config.get(CONF_MQTT_HOST),
-                self.config.get(CONF_MQTT_PORT, 1883),
-                60
-            )
-            client.loop_start()
-            self.mqtt_client = client
+            _LOGGER.info("正在连接MQTT服务器: %s:%s", 
+                        self.config.get(CONF_MQTT_HOST),
+                        self.config.get(CONF_MQTT_PORT, 1883))
+            
+            try:
+                client.connect(
+                    self.config.get(CONF_MQTT_HOST),
+                    self.config.get(CONF_MQTT_PORT, 1883),
+                    keepalive=60
+                )
+                client.loop_start()
+                self.mqtt_client = client
+                _LOGGER.info("MQTT客户端设置完成，客户端ID: %s", client_id)
+            except Exception as connect_ex:
+                _LOGGER.error("MQTT连接失败，将在下次更新时重试: %s", connect_ex)
         except Exception as ex:
-            _LOGGER.error("Failed to connect to MQTT server: %s", ex)
+            _LOGGER.error("设置MQTT客户端失败: %s", ex)
 
     def _on_mqtt_connect(self, client, userdata, flags, rc):
         """Handle MQTT connection."""
-        _LOGGER.info("Connected to MQTT server with result code %s", rc)
+        rc_codes = {
+            0: "连接成功",
+            1: "连接被拒绝-协议版本错误",
+            2: "连接被拒绝-无效的客户端标识符",
+            3: "连接被拒绝-服务器不可用",
+            4: "连接被拒绝-用户名或密码错误",
+            5: "连接被拒绝-未授权"
+        }
+        
+        rc_message = rc_codes.get(rc, f"未知错误代码: {rc}")
+        _LOGGER.info("MQTT连接状态: %s (代码: %s)", rc_message, rc)
+        
         if rc == 0:
             # 订阅国网ID对应的主题
             topic = f"nodejs/state-grid/{self.config.get(CONF_STATE_GRID_ID)}"
-            client.subscribe(topic)
-            _LOGGER.info("Subscribed to topic: %s", topic)
+            result, mid = client.subscribe(topic)
+            if result == 0:
+                _LOGGER.info("成功订阅主题: %s (消息ID: %s)", topic, mid)
+            else:
+                _LOGGER.error("订阅主题失败: %s (结果代码: %s)", topic, result)
+        else:
+            _LOGGER.error("MQTT连接失败，将在下次更新时重试")
 
     def _on_mqtt_message(self, client, userdata, msg):
         """Handle MQTT message."""
         try:
-            _LOGGER.debug("Received message from topic %s", msg.topic)
+            _LOGGER.debug("收到来自主题 %s 的消息", msg.topic)
+            
+            # 记录接收时间
+            receive_time = datetime.now()
+            
+            # 解析和处理消息
             payload = json.loads(msg.payload.decode())
             processed_data = self._process_qinglong_data(payload)
+            
+            # 更新数据和时间戳
             self.data = processed_data
+            self.last_update_time = receive_time
+            
+            # 通知协调器数据已更新
             self.async_set_updated_data(self.data)
+            
+            _LOGGER.info("成功更新MQTT数据，接收时间: %s", receive_time.strftime("%Y-%m-%d %H:%M:%S"))
+        except json.JSONDecodeError as json_err:
+            _LOGGER.error("MQTT消息JSON解析错误: %s", json_err)
         except Exception as ex:
-            _LOGGER.error("Error processing MQTT message: %s", ex)
+            _LOGGER.error("处理MQTT消息时出错: %s", ex)
+            
+    def _on_mqtt_disconnect(self, client, userdata, rc):
+        """Handle MQTT disconnection."""
+        if rc == 0:
+            _LOGGER.info("MQTT客户端正常断开连接")
+        else:
+            _LOGGER.warning("MQTT客户端意外断开连接，代码: %s，将尝试自动重连", rc)
+            
+    async def async_unload(self):
+        """Clean up resources when unloading."""
+        _LOGGER.info("正在清理State Grid Info资源")
+        if self.mqtt_client:
+            try:
+                self.mqtt_client.loop_stop()
+                self.mqtt_client.disconnect()
+                _LOGGER.info("已断开MQTT连接")
+            except Exception as ex:
+                _LOGGER.warning("断开MQTT连接时出错: %s", ex)
 
     async def _async_update_data(self):
         """Fetch data from the appropriate source."""
         try:
+            # 记录当前更新时间
+            current_time = datetime.now()
+            time_diff = current_time - self.last_update_time
+            
+            # 记录日志
+            _LOGGER.debug("执行数据更新，距离上次更新已过 %s 分钟", time_diff.total_seconds() / 60)
+            
+            # 更新时间戳
+            self.last_update_time = current_time
+            
             if self.config.get(CONF_DATA_SOURCE) == DATA_SOURCE_HASSBOX:
-                return await self.hass.async_add_executor_job(self._fetch_hassbox_data)
+                # 每次都重新从文件读取最新数据
+                _LOGGER.info("从HassBox配置文件重新读取数据")
+                
+                # 强制刷新标志 - 如果超过10分钟没有更新，强制刷新
+                force_refresh = time_diff.total_seconds() > 600  # 10分钟
+                if force_refresh:
+                    _LOGGER.warning("已超过10分钟未更新数据，强制刷新")
+                
+                # 使用异步执行器运行文件读取操作
+                hassbox_data = await self.hass.async_add_executor_job(self._fetch_hassbox_data)
+                
+                # 检查数据是否有效
+                if not hassbox_data:
+                    _LOGGER.warning("HassBox数据为空，可能配置文件不存在或格式错误")
+                    
+                    # 如果数据为空但之前有数据，保留旧数据但标记为过期
+                    if self.data:
+                        _LOGGER.info("保留旧数据但标记为过期")
+                        # 设置过期标志
+                        self.data["data_expired"] = True
+                        return self.data
+                    return {}
+                
+                # 更新数据时间戳
+                self.last_update_time = current_time
+                
+                # 清除过期标志
+                if isinstance(hassbox_data, dict):
+                    hassbox_data["data_expired"] = False
+                    
+                return hassbox_data
             elif self.config.get(CONF_DATA_SOURCE) == DATA_SOURCE_QINGLONG:
-                # MQTT数据通过回调更新，这里不需要主动获取
-                return self.data or {}
+                # 对于MQTT，检查连接状态并尝试重新连接
+                if not self.mqtt_client:
+                    _LOGGER.info("MQTT客户端不存在，创建新客户端")
+                    self._setup_mqtt_client()
+                elif not self.mqtt_client.is_connected():
+                    _LOGGER.info("MQTT客户端未连接，尝试重新连接")
+                    self._setup_mqtt_client()
+                else:
+                    # 如果连接正常但长时间没有收到数据更新，尝试重新订阅主题
+                    if time_diff.total_seconds() > 600:  # 10分钟没有更新
+                        _LOGGER.info("长时间未收到数据更新，尝试重新订阅主题")
+                        topic = f"nodejs/state-grid/{self.config.get(CONF_STATE_GRID_ID)}"
+                        self.mqtt_client.unsubscribe(topic)
+                        self.mqtt_client.subscribe(topic)
+                        _LOGGER.info("已重新订阅主题: %s", topic)
+                
+                # 如果数据为空或者数据过期（超过30分钟），返回空数据触发错误状态
+                if not self.data or (time_diff.total_seconds() > 1800):  # 30分钟
+                    _LOGGER.warning("数据为空或已过期，返回空数据")
+                    return {}
+                
+                return self.data
             return {}
         except Exception as ex:
             _LOGGER.error("Error updating State Grid Info data: %s", ex)
@@ -132,37 +274,105 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
         """Fetch data from HassBox integration."""
         try:
             import os
+            import time
+            import random
+            from datetime import datetime
+            
+            # 添加随机参数防止缓存
+            random_param = random.randint(1, 100000)
+            
+            # 获取标准配置路径
             config_path = self.hass.config.path(".storage", "state_grid.config")
-            _LOGGER.debug("尝试读取HassBox配置文件: %s", config_path)
+            _LOGGER.debug("尝试读取HassBox配置文件: %s (随机参数: %s)", config_path, random_param)
             
             # 检查文件是否存在
             if os.path.exists(config_path):
-                _LOGGER.info("HassBox配置文件存在，开始读取")
+                # 检查文件修改时间
                 try:
-                    with open(config_path, "r", encoding="utf-8") as file:
-                        _LOGGER.debug("成功打开配置文件")
-                        config_data = json.load(file)
-                        _LOGGER.debug("成功解析JSON数据")
+                    file_mod_time = os.path.getmtime(config_path)
+                    file_mod_datetime = datetime.fromtimestamp(file_mod_time)
+                    now = datetime.now()
+                    time_diff = now - file_mod_datetime
+                    
+                    _LOGGER.info(
+                        "HassBox配置文件存在，最后修改时间: %s (距现在 %.1f 小时)",
+                        file_mod_datetime.strftime("%Y-%m-%d %H:%M:%S"),
+                        time_diff.total_seconds() / 3600
+                    )
+                    
+                    # 如果文件超过24小时未更新，记录警告
+                    if time_diff.total_seconds() > 86400:  # 24小时
+                        _LOGGER.warning(
+                            "HassBox配置文件已超过24小时未更新，可能需要检查HassBox集成是否正常工作"
+                        )
+                except Exception as time_err:
+                    _LOGGER.warning("获取文件修改时间失败: %s", time_err)
+                
+                # 读取文件内容
+                try:
+                    # 清除系统缓存，确保读取最新文件
+                    try:
+                        os.stat(config_path)  # 刷新文件状态
+                    except Exception:
+                        pass
                         
+                    # 使用二进制模式打开，避免缓存问题
+                    with open(config_path, "rb") as file:
+                        _LOGGER.debug("成功打开配置文件")
+                        file_content = file.read().decode('utf-8')
+                        
+                        # 检查文件内容是否为空
+                        if not file_content.strip():
+                            _LOGGER.error("HassBox配置文件内容为空")
+                            return {}
+                        
+                        # 解析JSON数据
+                        try:
+                            config_data = json.loads(file_content)
+                            _LOGGER.debug("成功解析JSON数据")
+                        except json.JSONDecodeError as json_err:
+                            _LOGGER.error("JSON解析错误: %s", json_err)
+                            # 记录文件内容的前100个字符，帮助诊断
+                            _LOGGER.debug("文件内容前100个字符: %s", file_content[:100])
+                            return {}
+                        
+                        # 验证数据结构
                         if "data" in config_data:
                             _LOGGER.debug("配置包含data字段")
                             if "powerUserList" in config_data["data"]:
                                 _LOGGER.debug("配置包含powerUserList字段")
                                 index = self.config.get(CONF_CONSUMER_NUMBER_INDEX, 0)
                                 power_user_list = config_data["data"]["powerUserList"]
+                                
+                                if not power_user_list:
+                                    _LOGGER.error("用户列表为空")
+                                    return {}
+                                    
                                 _LOGGER.info("找到用户列表，共%d个用户", len(power_user_list))
                                 
                                 if 0 <= index < len(power_user_list):
                                     _LOGGER.info("成功获取索引为%d的用户数据", index)
-                                    return self._process_hassbox_data(power_user_list[index])
+                                    
+                                    # 检查用户数据是否包含必要字段
+                                    user_data = power_user_list[index]
+                                    if not user_data:
+                                        _LOGGER.error("用户数据为空")
+                                        return {}
+                                        
+                                    # 检查刷新时间
+                                    refresh_time = user_data.get("refresh_time", "")
+                                    if refresh_time:
+                                        _LOGGER.info("数据刷新时间: %s", refresh_time)
+                                    else:
+                                        _LOGGER.warning("数据没有刷新时间信息")
+                                    
+                                    return self._process_hassbox_data(user_data)
                                 else:
                                     _LOGGER.error("用户索引%d超出范围(0-%d)", index, len(power_user_list)-1)
                             else:
                                 _LOGGER.error("配置中缺少powerUserList字段")
                         else:
                             _LOGGER.error("配置中缺少data字段")
-                except json.JSONDecodeError as json_err:
-                    _LOGGER.error("JSON解析错误: %s", json_err)
                 except Exception as read_err:
                     _LOGGER.error("读取文件错误: %s", read_err)
             else:
@@ -171,8 +381,11 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 try:
                     storage_dir = self.hass.config.path(".storage")
                     if os.path.exists(storage_dir):
-                        files = os.listdir(storage_dir)
-                        _LOGGER.info("存储目录内容: %s", files)
+                        files = [f for f in os.listdir(storage_dir) if f.startswith("state_grid") or "grid" in f]
+                        if files:
+                            _LOGGER.info("找到可能相关的文件: %s", files)
+                        else:
+                            _LOGGER.info("存储目录中没有找到相关文件")
                     else:
                         _LOGGER.error("存储目录不存在: %s", storage_dir)
                 except Exception as dir_err:
@@ -374,9 +587,9 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 # 年阶梯计费
                 ladder_level_1 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_1}", 2160)
                 ladder_level_2 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_2}", 4200)
-                price_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}", 0.5283)
-                price_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}", 0.5783)
-                price_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}", 0.8283)
+                price_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}", 0.4983)
+                price_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}", 0.5483)
+                price_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}", 0.7983)
                 
                 # 获取当前年份
                 current_year = day_data["day"].split("-")[0]
@@ -429,24 +642,24 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 
             elif standard == BILLING_STANDARD_YEAR_阶梯_峰平谷:
                 # 年阶梯+峰平谷计费
-                ladder_level_1 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_1}", 2760)
-                ladder_level_2 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_2}", 4800)
+                ladder_level_1 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_1}", 2160)
+                ladder_level_2 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_2}", 4200)
                 
                 # 各阶梯的峰平谷电价
-                price_tip_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_TIP}", 0.5283)
-                price_peak_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_PEAK}", 0.5283)
-                price_flat_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_FLAT}", 0.5283)
-                price_valley_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_VALLEY}", 0.5283)
+                price_tip_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_TIP}", 0.5483)
+                price_peak_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_PEAK}", 0.5483)
+                price_flat_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_FLAT}", 0.5483)
+                price_valley_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_VALLEY}", 0.2983)
                 
-                price_tip_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_TIP}", 0.5783)
-                price_peak_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_PEAK}", 0.5783)
-                price_flat_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_FLAT}", 0.5783)
-                price_valley_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_VALLEY}", 0.5783)
+                price_tip_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_TIP}", 0.5983)
+                price_peak_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_PEAK}", 0.5983)
+                price_flat_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_FLAT}", 0.5983)
+                price_valley_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_VALLEY}", 0.3483)
                 
-                price_tip_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_TIP}", 0.8283)
-                price_peak_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_PEAK}", 0.8283)
-                price_flat_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_FLAT}", 0.8283)
-                price_valley_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_VALLEY}", 0.8283)
+                price_tip_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_TIP}", 0.8483)
+                price_peak_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_PEAK}", 0.8483)
+                price_flat_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_FLAT}", 0.8483)
+                price_valley_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_VALLEY}", 0.5983)
                 
                 # 获取当前年份
                 current_year = day_data["day"].split("-")[0]
@@ -545,11 +758,11 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 
             elif standard == BILLING_STANDARD_MONTH_阶梯:
                 # 月阶梯计费
-                ladder_level_1 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_1}", 230)
-                ladder_level_2 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_2}", 400)
-                price_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}", 0.5283)
-                price_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}", 0.5783)
-                price_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}", 0.8283)
+                ladder_level_1 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_1}", 180)
+                ladder_level_2 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_2}", 280)
+                price_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}", 0.5224)
+                price_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}", 0.6224)
+                price_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}", 0.8334)
                 
                 # 获取当前年月
                 current_year_month = day_data["day"][:7]  # 格式：YYYY-MM
@@ -602,8 +815,8 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 
             elif standard == BILLING_STANDARD_MONTH_阶梯_峰平谷:
                 # 月阶梯+峰平谷计费
-                ladder_level_1 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_1}", 230)
-                ladder_level_2 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_2}", 400)
+                ladder_level_1 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_1}", 180)
+                ladder_level_2 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_2}", 280)
                 
                 # 各阶梯的峰平谷电价
                 price_tip_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_TIP}", 0.5283)
@@ -718,13 +931,24 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 
             elif standard == BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格:
                 # 月阶梯+峰平谷+变动价格
-                ladder_level_1 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_1}", 230)
-                ladder_level_2 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_2}", 400)
+                ladder_level_1 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_1}", 180)
+                ladder_level_2 = self.config.get(f"{prefix}{CONF_LADDER_LEVEL_2}", 280)
                 
-                # 尖峰平电价（全年固定）
-                price_tip = self.config.get(f"{prefix}{CONF_PRICE_TIP}", 0.6283)
-                price_peak = self.config.get(f"{prefix}{CONF_PRICE_PEAK}", 0.5783)
-                price_flat = self.config.get(f"{prefix}{CONF_PRICE_FLAT}", 0.5283)
+                # 各阶梯的尖峰平谷电价
+                # 第一阶梯
+                price_tip_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_TIP}", 0.5224)
+                price_peak_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_PEAK}", 0.6224)
+                price_flat_1 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_1}_{CONF_PRICE_FLAT}", 0.8224)
+                
+                # 第二阶梯
+                price_tip_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_TIP}", 0.5224)
+                price_peak_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_PEAK}", 0.6224)
+                price_flat_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}_{CONF_PRICE_FLAT}", 0.8224)
+                
+                # 第三阶梯
+                price_tip_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_TIP}", 0.5224)
+                price_peak_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_PEAK}", 0.6224)
+                price_flat_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_FLAT}", 0.8224)
                 
                 # 获取当前日期信息
                 current_date = day_data["day"]
@@ -732,9 +956,9 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 month = int(current_date[5:7])  # 当前月份，1-12
                 
                 # 获取当月各阶梯的谷电价
-                valley_price_1 = self.config.get(f"{prefix}month_{month:02d}_ladder_1_valley", 0.3)
-                valley_price_2 = self.config.get(f"{prefix}month_{month:02d}_ladder_2_valley", 0.3)
-                valley_price_3 = self.config.get(f"{prefix}month_{month:02d}_ladder_3_valley", 0.3)
+                valley_price_1 = self.config.get(f"{prefix}month_{month:02d}_ladder_1_valley", 0.2535)
+                valley_price_2 = self.config.get(f"{prefix}month_{month:02d}_ladder_2_valley", 0.3535)
+                valley_price_3 = self.config.get(f"{prefix}month_{month:02d}_ladder_3_valley", 0.5535)
                 
                 # 计算当月累计用电量（包括当天）
                 month_accumulated = 0
@@ -746,9 +970,9 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 # 根据累计用电量确定当前阶梯
                 if month_accumulated <= ladder_level_1:
                     # 第一阶梯
-                    return (day_tpq * price_tip + 
-                            day_ppq * price_peak + 
-                            day_npq * price_flat + 
+                    return (day_tpq * price_tip_1 + 
+                            day_ppq * price_peak_1 + 
+                            day_npq * price_flat_1 + 
                             day_vpq * valley_price_1)
                 elif month_accumulated <= ladder_level_2:
                     # 第二阶梯
@@ -758,20 +982,24 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                         ratio_1 = (ladder_level_1 - (month_accumulated - day_ele_num)) / day_ele_num
                         ratio_2 = 1 - ratio_1
                         
-                        # 尖峰平电价部分（固定）
-                        cost_tpf = (day_tpq * price_tip + 
-                                   day_ppq * price_peak + 
-                                   day_npq * price_flat)
+                        # 第一阶梯部分
+                        cost_1 = (day_tpq * price_tip_1 * ratio_1 + 
+                                  day_ppq * price_peak_1 * ratio_1 + 
+                                  day_npq * price_flat_1 * ratio_1 + 
+                                  day_vpq * valley_price_1 * ratio_1)
                         
-                        # 谷电价部分（按阶梯变化）
-                        cost_valley = day_vpq * (valley_price_1 * ratio_1 + valley_price_2 * ratio_2)
+                        # 第二阶梯部分
+                        cost_2 = (day_tpq * price_tip_2 * ratio_2 + 
+                                  day_ppq * price_peak_2 * ratio_2 + 
+                                  day_npq * price_flat_2 * ratio_2 + 
+                                  day_vpq * valley_price_2 * ratio_2)
                         
-                        return cost_tpf + cost_valley
+                        return cost_1 + cost_2
                     else:
                         # 完全在第二阶梯
-                        return (day_tpq * price_tip + 
-                                day_ppq * price_peak + 
-                                day_npq * price_flat + 
+                        return (day_tpq * price_tip_2 + 
+                                day_ppq * price_peak_2 + 
+                                day_npq * price_flat_2 + 
                                 day_vpq * valley_price_2)
                 else:
                     # 第三阶梯或跨阶梯
@@ -782,41 +1010,51 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                         ratio_2 = (ladder_level_2 - ladder_level_1) / day_ele_num if (ladder_level_2 - remaining) > 0 else 0
                         ratio_3 = 1 - ratio_1 - ratio_2
                         
-                        # 尖峰平电价部分（固定）
-                        cost_tpf = (day_tpq * price_tip + 
-                                   day_ppq * price_peak + 
-                                   day_npq * price_flat)
+                        # 各阶梯部分费用
+                        cost_1 = (day_tpq * price_tip_1 * ratio_1 + 
+                                  day_ppq * price_peak_1 * ratio_1 + 
+                                  day_npq * price_flat_1 * ratio_1 + 
+                                  day_vpq * valley_price_1 * ratio_1)
                         
-                        # 谷电价部分（按阶梯变化）
-                        cost_valley = day_vpq * (valley_price_1 * ratio_1 + 
-                                               valley_price_2 * ratio_2 + 
-                                               valley_price_3 * ratio_3)
+                        cost_2 = (day_tpq * price_tip_2 * ratio_2 + 
+                                  day_ppq * price_peak_2 * ratio_2 + 
+                                  day_npq * price_flat_2 * ratio_2 + 
+                                  day_vpq * valley_price_2 * ratio_2)
                         
-                        return cost_tpf + cost_valley
+                        cost_3 = (day_tpq * price_tip_3 * ratio_3 + 
+                                  day_ppq * price_peak_3 * ratio_3 + 
+                                  day_npq * price_flat_3 * ratio_3 + 
+                                  day_vpq * valley_price_3 * ratio_3)
+                        
+                        return cost_1 + cost_2 + cost_3
                     elif month_accumulated - day_ele_num <= ladder_level_2:
                         # 跨越第二、第三阶梯
                         ratio_2 = (ladder_level_2 - (month_accumulated - day_ele_num)) / day_ele_num
                         ratio_3 = 1 - ratio_2
                         
-                        # 尖峰平电价部分（固定）
-                        cost_tpf = (day_tpq * price_tip + 
-                                   day_ppq * price_peak + 
-                                   day_npq * price_flat)
+                        # 第二阶梯部分
+                        cost_2 = (day_tpq * price_tip_2 * ratio_2 + 
+                                  day_ppq * price_peak_2 * ratio_2 + 
+                                  day_npq * price_flat_2 * ratio_2 + 
+                                  day_vpq * valley_price_2 * ratio_2)
                         
-                        # 谷电价部分（按阶梯变化）
-                        cost_valley = day_vpq * (valley_price_2 * ratio_2 + valley_price_3 * ratio_3)
+                        # 第三阶梯部分
+                        cost_3 = (day_tpq * price_tip_3 * ratio_3 + 
+                                  day_ppq * price_peak_3 * ratio_3 + 
+                                  day_npq * price_flat_3 * ratio_3 + 
+                                  day_vpq * valley_price_3 * ratio_3)
                         
-                        return cost_tpf + cost_valley
+                        return cost_2 + cost_3
                     else:
                         # 完全在第三阶梯
-                        return (day_tpq * price_tip + 
-                                day_ppq * price_peak + 
-                                day_npq * price_flat + 
+                        return (day_tpq * price_tip_3 + 
+                                day_ppq * price_peak_3 + 
+                                day_npq * price_flat_3 + 
                                 day_vpq * valley_price_3)
                 
             elif standard == BILLING_STANDARD_OTHER_平均单价:
                 # 其他-平均单价
-                avg_price = self.config.get(f"{prefix}{CONF_AVERAGE_PRICE}", 0.5583)
+                avg_price = self.config.get(f"{prefix}{CONF_AVERAGE_PRICE}", 0.6)
                 return day_ele_num * avg_price
                 
             return 0
@@ -977,6 +1215,20 @@ class StateGridInfoSensor(SensorEntity):
         }
         
     @property
+    def available(self):
+        """Return if entity is available."""
+        # 检查数据是否有效
+        if not self.coordinator.data:
+            return False
+            
+        # 检查数据是否过期（超过1小时）
+        time_diff = datetime.now() - self.coordinator.last_update_time
+        if time_diff.total_seconds() > 3600:  # 1小时
+            return False
+            
+        return True
+        
+    @property
     def native_value(self):
         """Return the state of the sensor."""
         if self.coordinator.data:
@@ -986,11 +1238,64 @@ class StateGridInfoSensor(SensorEntity):
     @property
     def extra_state_attributes(self):
         """Return the state attributes."""
+        attrs = {}
+        
+        # 添加基本属性
         if self.coordinator.data:
-            return {
+            attrs.update({
                 "date": self.coordinator.data.get("date", ""),
                 "daylist": self.coordinator.data.get("dayList", []),
                 "monthlist": self.coordinator.data.get("monthList", []),
                 "yearlist": self.coordinator.data.get("yearList", []),
-            }
-        return {}
+            })
+        
+        # 添加状态信息
+        attrs["last_update"] = self.coordinator.last_update_time.strftime("%Y-%m-%d %H:%M:%S")
+        attrs["data_source"] = self.config.get(CONF_DATA_SOURCE, "unknown")
+        
+        # 计算距离上次更新的时间
+        time_diff = datetime.now() - self.coordinator.last_update_time
+        attrs["minutes_since_update"] = round(time_diff.total_seconds() / 60, 1)
+        
+        # 添加数据源特定信息
+        if self.config.get(CONF_DATA_SOURCE) == DATA_SOURCE_QINGLONG:
+            # MQTT连接状态
+            mqtt_connected = False
+            if self.coordinator.mqtt_client:
+                mqtt_connected = self.coordinator.mqtt_client.is_connected()
+            attrs["mqtt_connected"] = mqtt_connected
+            attrs["mqtt_host"] = self.config.get(CONF_MQTT_HOST, "")
+        elif self.config.get(CONF_DATA_SOURCE) == DATA_SOURCE_HASSBOX:
+            # HassBox配置信息
+            import os
+            config_path = self.coordinator.hass.config.path(".storage", "state_grid.config")
+            
+            # 检查配置文件是否存在
+            file_exists = os.path.exists(config_path)
+            attrs["config_file_exists"] = file_exists
+            
+            if file_exists:
+                try:
+                    # 获取文件修改时间
+                    file_mod_time = os.path.getmtime(config_path)
+                    file_mod_datetime = datetime.fromtimestamp(file_mod_time)
+                    attrs["config_file_modified"] = file_mod_datetime.strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # 计算文件修改距今时间
+                    file_time_diff = datetime.now() - file_mod_datetime
+                    attrs["hours_since_file_update"] = round(file_time_diff.total_seconds() / 3600, 1)
+                except Exception:
+                    pass
+            
+            # 添加用户索引信息
+            attrs["consumer_number_index"] = self.config.get(CONF_CONSUMER_NUMBER_INDEX, 0)
+            
+        # 添加更新状态
+        if time_diff.total_seconds() > 1800:  # 30分钟
+            attrs["update_status"] = "overdue"
+        elif time_diff.total_seconds() > 600:  # 10分钟
+            attrs["update_status"] = "delayed"
+        else:
+            attrs["update_status"] = "normal"
+            
+        return attrs

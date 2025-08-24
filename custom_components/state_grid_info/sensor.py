@@ -614,21 +614,67 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 price_2 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_2}", 0.5483)
                 price_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}", 0.7983)
                 
-                # 获取当前年份
-                current_year = day_data["day"].split("-")[0]
+                # 获取当前日期和年份
+                current_day = day_data["day"]
+                current_year = current_day.split("-")[0]
                 
                 # 获取年阶梯起始日期（默认为当年1月1日）
                 year_ladder_start = self.config.get(f"{prefix}{CONF_YEAR_LADDER_START}", f"0101")
                 year_ladder_start_date = current_year + "-" + year_ladder_start[:2] + "-" + year_ladder_start[2:]
                 
-                # 计算当年累计用电量（截至当前日期）
+                # 检查当前日期是否在年阶梯起始日期之前（跨年情况）
+                is_before_ladder_start = current_day < year_ladder_start_date
+                
+                # 计算累计用电量
                 year_accumulated = 0
-                current_day = day_data["day"]
+                
+                # 检查是否为分段计费模式
+                billing_type = self.config.get(CONF_BILLING_TYPE)
+                is_segmented = billing_type == BILLING_TYPE_SEGMENTED
+                segment_date = self.config.get(CONF_SEGMENT_DATE, "") if is_segmented else ""
+                day_date = current_day.replace("-", "")[:6]  # 取年月部分
+                
                 if self.data is not None:
                     for data in self.data.get("dayList", []):
-                        # 只计算起始日期之后且不超过当前日期的用电量
-                        if data["day"] >= year_ladder_start_date and data["day"] <= current_day and data["day"].startswith(current_year):
-                            year_accumulated += data["dayEleNum"]
+                        data_date = data["day"].replace("-", "")[:6]
+                        
+                        # 处理跨年情况
+                        if is_before_ladder_start:
+                            # 如果是跨年情况，需要计算两部分累计电量：
+                            # 1. 上一年的阶梯起始日期到12月31日
+                            # 2. 当前年的1月1日到当前日期
+                            
+                            # 第一部分：上一年的累计电量
+                            prev_year = str(int(current_year) - 1)
+                            prev_year_ladder_start_date = prev_year + "-" + year_ladder_start[:2] + "-" + year_ladder_start[2:]
+                            prev_year_end_date = prev_year + "-12-31"
+                            
+                            # 第二部分：当前年的累计电量
+                            current_year_start_date = current_year + "-01-01"
+                            
+                            if (data["day"] >= prev_year_ladder_start_date and 
+                                data["day"] <= prev_year_end_date and 
+                                data["day"].startswith(prev_year) and
+                                (not is_segmented or (data_date < segment_date) == (day_date < segment_date))):
+                                year_accumulated += data["dayEleNum"]
+                            
+                            # 添加当前年1月1日到当前日期的累计电量
+                            if (data["day"] >= current_year_start_date and 
+                                data["day"] <= current_day and 
+                                data["day"].startswith(current_year) and
+                                (not is_segmented or (data_date < segment_date) == (day_date < segment_date))):
+                                year_accumulated += data["dayEleNum"]
+                        else:
+                            # 正常情况，计算当前年的累计电量
+                            if (data["day"] >= year_ladder_start_date and 
+                                data["day"] <= current_day and 
+                                data["day"].startswith(current_year) and
+                                (not is_segmented or (data_date < segment_date) == (day_date < segment_date))):
+                                year_accumulated += data["dayEleNum"]
+                
+                _LOGGER.debug("年阶梯计费 - 当前年份: %s, 起始日期: %s, 当前日期: %s, 累计用电量: %.2f, 前缀: %s, 分段模式: %s, 分段日期: %s, 跨年情况: %s, 计算范围: %s", 
+                          current_year, year_ladder_start_date, current_day, year_accumulated, prefix, is_segmented, segment_date, is_before_ladder_start, 
+                          f"{prev_year_ladder_start_date}至{prev_year_end_date} + {current_year_start_date}至{current_day}" if is_before_ladder_start else f"{year_ladder_start_date}至{current_day}")
                 
                 # 根据累计用电量计算阶梯电价
                 if year_accumulated <= ladder_level_1:
@@ -690,21 +736,67 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 price_flat_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_FLAT}", 0.8483)
                 price_valley_3 = self.config.get(f"{prefix}{CONF_LADDER_PRICE_3}_{CONF_PRICE_VALLEY}", 0.5983)
                 
-                # 获取当前年份
-                current_year = day_data["day"].split("-")[0]
+                # 获取当前日期和年份
+                current_day = day_data["day"]
+                current_year = current_day.split("-")[0]
                 
                 # 获取年阶梯起始日期（默认为当年1月1日）
                 year_ladder_start = self.config.get(f"{prefix}{CONF_YEAR_LADDER_START}", f"0101")
                 year_ladder_start_date = current_year + "-" + year_ladder_start[:2] + "-" + year_ladder_start[2:]
                 
-                # 计算当年累计用电量（截至当前日期）
+                # 检查当前日期是否在年阶梯起始日期之前（跨年情况）
+                is_before_ladder_start = current_day < year_ladder_start_date
+                
+                # 计算累计用电量
                 year_accumulated = 0
-                current_day = day_data["day"]
+                
+                # 检查是否为分段计费模式
+                billing_type = self.config.get(CONF_BILLING_TYPE)
+                is_segmented = billing_type == BILLING_TYPE_SEGMENTED
+                segment_date = self.config.get(CONF_SEGMENT_DATE, "") if is_segmented else ""
+                day_date = current_day.replace("-", "")[:6]  # 取年月部分
+                
                 if self.data is not None:
                     for data in self.data.get("dayList", []):
-                        # 只计算起始日期之后且不超过当前日期的用电量
-                        if data["day"] >= year_ladder_start_date and data["day"] <= current_day and data["day"].startswith(current_year):
-                            year_accumulated += data["dayEleNum"]
+                        data_date = data["day"].replace("-", "")[:6]
+                        
+                        # 处理跨年情况
+                        if is_before_ladder_start:
+                            # 如果是跨年情况，需要计算两部分累计电量：
+                            # 1. 上一年的阶梯起始日期到12月31日
+                            # 2. 当前年的1月1日到当前日期
+                            
+                            # 第一部分：上一年的累计电量
+                            prev_year = str(int(current_year) - 1)
+                            prev_year_ladder_start_date = prev_year + "-" + year_ladder_start[:2] + "-" + year_ladder_start[2:]
+                            prev_year_end_date = prev_year + "-12-31"
+                            
+                            # 第二部分：当前年的累计电量
+                            current_year_start_date = current_year + "-01-01"
+                            
+                            if (data["day"] >= prev_year_ladder_start_date and 
+                                data["day"] <= prev_year_end_date and 
+                                data["day"].startswith(prev_year) and
+                                (not is_segmented or (data_date < segment_date) == (day_date < segment_date))):
+                                year_accumulated += data["dayEleNum"]
+                            
+                            # 添加当前年1月1日到当前日期的累计电量
+                            if (data["day"] >= current_year_start_date and 
+                                data["day"] <= current_day and 
+                                data["day"].startswith(current_year) and
+                                (not is_segmented or (data_date < segment_date) == (day_date < segment_date))):
+                                year_accumulated += data["dayEleNum"]
+                        else:
+                            # 正常情况，计算当前年的累计电量
+                            if (data["day"] >= year_ladder_start_date and 
+                                data["day"] <= current_day and 
+                                data["day"].startswith(current_year) and
+                                (not is_segmented or (data_date < segment_date) == (day_date < segment_date))):
+                                year_accumulated += data["dayEleNum"]
+                
+                _LOGGER.debug("年阶梯计费 - 当前年份: %s, 起始日期: %s, 当前日期: %s, 累计用电量: %.2f, 前缀: %s, 分段模式: %s, 分段日期: %s, 跨年情况: %s, 计算范围: %s", 
+                          current_year, year_ladder_start_date, current_day, year_accumulated, prefix, is_segmented, segment_date, is_before_ladder_start, 
+                          f"{prev_year_ladder_start_date}至{prev_year_end_date} + {current_year_start_date}至{current_day}" if is_before_ladder_start else f"{year_ladder_start_date}至{current_day}")
 
                 # 根据累计用电量确定当前阶梯
                 if year_accumulated <= ladder_level_1:

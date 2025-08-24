@@ -380,16 +380,17 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # 年阶梯
         if current_standard == BILLING_STANDARD_YEAR_阶梯:
             schema = {
+                vol.Required(CONF_YEAR_LADDER_START, default="0101"): cv.string,  # 格式：月日 (MMDD)
                 vol.Required(CONF_LADDER_LEVEL_1, default=2160): cv.positive_float,
                 vol.Required(CONF_LADDER_LEVEL_2, default=4200): cv.positive_float,
                 vol.Required(CONF_LADDER_PRICE_1, default=0.4983): cv.positive_float,
                 vol.Required(CONF_LADDER_PRICE_2, default=0.5483): cv.positive_float,
                 vol.Required(CONF_LADDER_PRICE_3, default=0.7983): cv.positive_float,
-                vol.Required(CONF_YEAR_LADDER_START, default="0101"): cv.string,  # 格式：月日 (MMDD)
             }
         # 年阶梯峰平谷
         elif current_standard == BILLING_STANDARD_YEAR_阶梯_峰平谷:
             schema = {
+                vol.Required(CONF_YEAR_LADDER_START, default="0101"): cv.string,  # 格式：月日 (MMDD)
                 vol.Required(CONF_LADDER_LEVEL_1, default=2160): cv.positive_float,
                 vol.Required(CONF_LADDER_LEVEL_2, default=4200): cv.positive_float,
                 # 第一阶梯价格
@@ -407,7 +408,6 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_PEAK}", default=0.8483): cv.positive_float,
                 vol.Required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_FLAT}", default=0.8483): cv.positive_float,
                 vol.Required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_VALLEY}", default=0.5983): cv.positive_float,
-                vol.Required(CONF_YEAR_LADDER_START, default="0101"): cv.string,  # 格式：月日 (MMDD)
             }
         # 月阶梯
         elif current_standard == BILLING_STANDARD_MONTH_阶梯:
@@ -448,15 +448,15 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_LADDER_LEVEL_2, default=280): cv.positive_float,
                 # 第一阶梯价格
                 vol.Required(f"{CONF_LADDER_PRICE_1}_{CONF_PRICE_TIP}", default=0.5224): cv.positive_float,
-                vol.Required(f"{CONF_LADDER_PRICE_1}_{CONF_PRICE_PEAK}", default=0.6224): cv.positive_float,
-                vol.Required(f"{CONF_LADDER_PRICE_1}_{CONF_PRICE_FLAT}", default=0.8224): cv.positive_float,
+                vol.Required(f"{CONF_LADDER_PRICE_1}_{CONF_PRICE_PEAK}", default=0.5224): cv.positive_float,
+                vol.Required(f"{CONF_LADDER_PRICE_1}_{CONF_PRICE_FLAT}", default=0.5224): cv.positive_float,
                 # 第二阶梯价格
-                vol.Required(f"{CONF_LADDER_PRICE_2}_{CONF_PRICE_TIP}", default=0.5224): cv.positive_float,
+                vol.Required(f"{CONF_LADDER_PRICE_2}_{CONF_PRICE_TIP}", default=0.6224): cv.positive_float,
                 vol.Required(f"{CONF_LADDER_PRICE_2}_{CONF_PRICE_PEAK}", default=0.6224): cv.positive_float,
-                vol.Required(f"{CONF_LADDER_PRICE_2}_{CONF_PRICE_FLAT}", default=0.8224): cv.positive_float,
+                vol.Required(f"{CONF_LADDER_PRICE_2}_{CONF_PRICE_FLAT}", default=0.6224): cv.positive_float,
                 # 第三阶梯价格
-                vol.Required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_TIP}", default=0.5224): cv.positive_float,
-                vol.Required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_PEAK}", default=0.6224): cv.positive_float,
+                vol.Required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_TIP}", default=0.8224): cv.positive_float,
+                vol.Required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_PEAK}", default=0.8224): cv.positive_float,
                 vol.Required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_FLAT}", default=0.8224): cv.positive_float,
                 
                 # 1月份的三个阶梯谷电价

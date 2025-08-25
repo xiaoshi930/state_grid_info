@@ -672,10 +672,6 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                                 (not is_segmented or (data_date < segment_date) == (day_date < segment_date))):
                                 year_accumulated += data["dayEleNum"]
                 
-                _LOGGER.debug("年阶梯计费 - 当前年份: %s, 起始日期: %s, 当前日期: %s, 累计用电量: %.2f, 前缀: %s, 分段模式: %s, 分段日期: %s, 跨年情况: %s, 计算范围: %s", 
-                          current_year, year_ladder_start_date, current_day, year_accumulated, prefix, is_segmented, segment_date, is_before_ladder_start, 
-                          f"{prev_year_ladder_start_date}至{prev_year_end_date} + {current_year_start_date}至{current_day}" if is_before_ladder_start else f"{year_ladder_start_date}至{current_day}")
-                
                 # 根据累计用电量计算阶梯电价
                 if year_accumulated <= ladder_level_1:
                     # 第一阶梯
@@ -794,10 +790,6 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                                 (not is_segmented or (data_date < segment_date) == (day_date < segment_date))):
                                 year_accumulated += data["dayEleNum"]
                 
-                _LOGGER.debug("年阶梯计费 - 当前年份: %s, 起始日期: %s, 当前日期: %s, 累计用电量: %.2f, 前缀: %s, 分段模式: %s, 分段日期: %s, 跨年情况: %s, 计算范围: %s", 
-                          current_year, year_ladder_start_date, current_day, year_accumulated, prefix, is_segmented, segment_date, is_before_ladder_start, 
-                          f"{prev_year_ladder_start_date}至{prev_year_end_date} + {current_year_start_date}至{current_day}" if is_before_ladder_start else f"{year_ladder_start_date}至{current_day}")
-
                 # 根据累计用电量确定当前阶梯
                 if year_accumulated <= ladder_level_1:
                     # 第一阶梯
@@ -1097,6 +1089,7 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                         if data["day"].startswith(current_year_month) and data["day"] <= current_day: 
                             month_accumulated += data["dayEleNum"]
 
+
                 # 根据累计用电量确定当前阶梯
                 if month_accumulated <= ladder_level_1:
                     # 第一阶梯
@@ -1181,6 +1174,7 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                                 day_ppq * price_peak_3 + 
                                 day_npq * price_flat_3 + 
                                 day_vpq * valley_price_3)
+
                 
             elif standard == BILLING_STANDARD_OTHER_平均单价:
                 # 其他-平均单价
@@ -1372,6 +1366,45 @@ class StateGridInfoSensor(SensorEntity):
         
         # 添加基本属性
         if self.coordinator.data:
+            # 计算日均消费（最近7天的平均值）和剩余天数
+            day_list = self.coordinator.data.get("dayList", [])
+            if day_list:
+                # 确保按日期降序排列（最新的在前面）
+                sorted_days = sorted(day_list, key=lambda x: x["day"], reverse=True)
+                
+                # 获取最近7天的数据
+                recent_days = sorted_days[:7]
+                
+                if recent_days:
+                    # 计算日均消费
+                    daily_costs = [day.get("dayEleCost", 0) for day in recent_days]
+                    avg_daily_cost = sum(daily_costs) / len(daily_costs)
+                    
+                    # 计算剩余天数
+                    balance = self.coordinator.data.get("balance", 0)
+                    if avg_daily_cost > 0:
+                        estimated_days = balance / avg_daily_cost
+                        
+                        # 计算最新用电日期与今天的差值
+                        try:
+                            latest_day = sorted_days[0]["day"]
+                            latest_date = datetime.strptime(latest_day, "%Y-%m-%d")
+                            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                            days_since_latest = (today - latest_date).days
+                            
+                            # 剩余天数 = 预计使用天数 - (今天日期-最新用电日期)
+                            remaining_days = max(0, estimated_days - days_since_latest)
+                            # 向上取整
+                            import math
+                            
+                            # 将日均消费和剩余天数放在最前面
+                            attrs["日均消费"] = round(avg_daily_cost, 2)
+                            attrs["剩余天数"] = math.ceil(remaining_days)
+                            
+                        except (ValueError, IndexError) as e:
+                            _LOGGER.error("计算剩余天数时出错: %s", e)
+            
+            # 添加其他基本属性
             attrs.update({
                 "date": self.coordinator.data.get("date", ""),
                 "daylist": self.coordinator.data.get("dayList", []),
@@ -1380,52 +1413,7 @@ class StateGridInfoSensor(SensorEntity):
             })
         
         # 添加状态信息
-        attrs["last_update"] = self.coordinator.last_update_time.strftime("%Y-%m-%d %H:%M:%S")
-        attrs["data_source"] = self.config.get(CONF_DATA_SOURCE, "unknown")
-        
-        # 计算距离上次更新的时间
-        time_diff = datetime.now() - self.coordinator.last_update_time
-        attrs["minutes_since_update"] = round(time_diff.total_seconds() / 60, 1)
-        
-        # 添加数据源特定信息
-        if self.config.get(CONF_DATA_SOURCE) == DATA_SOURCE_QINGLONG:
-            # MQTT连接状态
-            mqtt_connected = False
-            if self.coordinator.mqtt_client:
-                mqtt_connected = self.coordinator.mqtt_client.is_connected()
-            attrs["mqtt_connected"] = mqtt_connected
-            attrs["mqtt_host"] = self.config.get(CONF_MQTT_HOST, "")
-        elif self.config.get(CONF_DATA_SOURCE) == DATA_SOURCE_HASSBOX:
-            # HassBox配置信息
-            import os
-            config_path = self.coordinator.hass.config.path(".storage", "state_grid.config")
-            
-            # 检查配置文件是否存在
-            file_exists = os.path.exists(config_path)
-            attrs["config_file_exists"] = file_exists
-            
-            if file_exists:
-                try:
-                    # 获取文件修改时间
-                    file_mod_time = os.path.getmtime(config_path)
-                    file_mod_datetime = datetime.fromtimestamp(file_mod_time)
-                    attrs["config_file_modified"] = file_mod_datetime.strftime("%Y-%m-%d %H:%M:%S")
-                    
-                    # 计算文件修改距今时间
-                    file_time_diff = datetime.now() - file_mod_datetime
-                    attrs["hours_since_file_update"] = round(file_time_diff.total_seconds() / 3600, 1)
-                except Exception:
-                    pass
-            
-            # 添加用户索引信息
-            attrs["consumer_number_index"] = self.config.get(CONF_CONSUMER_NUMBER_INDEX, 0)
-            
-        # 添加更新状态
-        if time_diff.total_seconds() > 1800:  # 30分钟
-            attrs["update_status"] = "overdue"
-        elif time_diff.total_seconds() > 600:  # 10分钟
-            attrs["update_status"] = "delayed"
-        else:
-            attrs["update_status"] = "normal"
+        attrs["数据源"] = self.config.get(CONF_DATA_SOURCE, "unknown")
+        attrs["最后同步日期"] = self.coordinator.last_update_time.strftime("%Y-%m-%d %H:%M:%S")
             
         return attrs

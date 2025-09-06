@@ -12,7 +12,7 @@
 
 ### 方法二：手动安装
 1. 下载集成文件：
-   - 从 [GitHub 发布页面](https://github.com/your_repo/state_grid_info/releases) 下载最新版本的 `.zip` 文件。
+   - 从 [GitHub 发布页面](https://github.com/xiaoshi930/state_grid_info/releases) 下载最新版本的 `.zip` 文件。
 2. 解压文件，将 `custom_components/state_grid_info` 文件夹复制到您的 Home Assistant 的 `custom_components` 目录中。
    - 如果 `custom_components` 目录不存在，请手动创建。
 3. 重启 Home Assistant。

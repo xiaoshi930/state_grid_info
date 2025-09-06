@@ -7,7 +7,7 @@
    - 存储库: `https://github.com/your_repo/state_grid_info`
    - 类别: 集成
 4. 点击「添加」。
-5. 在 HACS 的「集成」页面中搜索 `State Grid Info`，然后点击「下载」。
+5. 在 HACS 的「集成」页面中搜索 `国家电网辅助`或者`xiaoshi`，然后点击「下载」。
 6. 下载完成后，重启 Home Assistant。
 
 ### 方法二：手动安装

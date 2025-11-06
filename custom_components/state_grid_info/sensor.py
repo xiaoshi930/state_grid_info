@@ -396,13 +396,20 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 day = item.get("day", "")
                 if day:
                     day = f"{day[0:4]}-{day[4:6]}-{day[6:]}"
+                    # 处理"-"值，将其转换为0
+                    day_ele_pq = item.get("dayElePq", "0")
+                    this_tpq = item.get("thisTPq", "0")
+                    this_ppq = item.get("thisPPq", "0")
+                    this_npq = item.get("thisNPq", "0")
+                    this_vpq = item.get("thisVPq", "0")
+                    
                     daylist1.append({
                         "day": day,
-                        "dayEleNum": float(item.get("dayElePq", 0)),
-                        "dayTPq": float(item.get("thisTPq", 0)),
-                        "dayPPq": float(item.get("thisPPq", 0)),
-                        "dayNPq": float(item.get("thisNPq", 0)),
-                        "dayVPq": float(item.get("thisVPq", 0)),
+                        "dayEleNum": float(day_ele_pq) if day_ele_pq != "-" else 0.0,
+                        "dayTPq": float(this_tpq) if this_tpq != "-" else 0.0,
+                        "dayPPq": float(this_ppq) if this_ppq != "-" else 0.0,
+                        "dayNPq": float(this_npq) if this_npq != "-" else 0.0,
+                        "dayVPq": float(this_vpq) if this_vpq != "-" else 0.0,
                     })
             
             # 提取所有的日用电，在每个月用电下面，需要for循环提取出来
@@ -420,13 +427,20 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 day = item.get("day", "")
                 if day:
                     day = f"{day[0:4]}-{day[4:6]}-{day[6:]}"
+                    # 处理"-"值，将其转换为0
+                    day_ele_pq = item.get("dayElePq", "0")
+                    this_tpq = item.get("thisTPq", "0")
+                    this_ppq = item.get("thisPPq", "0")
+                    this_npq = item.get("thisNPq", "0")
+                    this_vpq = item.get("thisVPq", "0")
+                    
                     daylist4.append({
                         "day": day,
-                        "dayEleNum": float(item.get("dayElePq", 0)),
-                        "dayTPq": float(item.get("thisTPq", 0)),
-                        "dayPPq": float(item.get("thisPPq", 0)),
-                        "dayNPq": float(item.get("thisNPq", 0)),
-                        "dayVPq": float(item.get("thisVPq", 0)),
+                        "dayEleNum": float(day_ele_pq) if day_ele_pq != "-" else 0.0,
+                        "dayTPq": float(this_tpq) if this_tpq != "-" else 0.0,
+                        "dayPPq": float(this_ppq) if this_ppq != "-" else 0.0,
+                        "dayNPq": float(this_npq) if this_npq != "-" else 0.0,
+                        "dayVPq": float(this_vpq) if this_vpq != "-" else 0.0,
                     })
             
             # 合并daylist4和daylist1

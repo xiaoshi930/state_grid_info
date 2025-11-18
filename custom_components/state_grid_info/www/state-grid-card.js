@@ -1,4 +1,4 @@
-console.info("%c 国网信息卡 \n%c   v 1.0   ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: dimgray");
+console.info("%c 国网信息卡 \n%c   v 1.1   ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: dimgray");
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 import tinycolor from "./tinycolor.js";
 
@@ -1417,8 +1417,8 @@ class StateGridChartMonth extends LitElement {
         y: Number(item.monthEleCost) || 0
       })),
       current: {
-        ele: monthlistDay.monthEleNum || 0,
-        cost: monthlistDay.monthEleCost || 0,
+        ele: monthlistDay?.monthEleNum || 0,
+        cost: monthlistDay?.monthEleCost || 0,
         days: monthlist.length
       },
       lastelectricity: lastmonthlist.map(item => ({
@@ -1430,8 +1430,8 @@ class StateGridChartMonth extends LitElement {
         y: Number(item.monthEleCost) || 0
       })),
       lastcurrent: {
-        ele: lastmonthlistDay.monthEleNum || 0,
-        cost: lastmonthlistDay.monthEleCost || 0,
+        ele: lastmonthlistDay?.monthEleNum || 0,
+        cost: lastmonthlistDay?.monthEleCost || 0,
         days: lastmonthlist.length
       }
     };

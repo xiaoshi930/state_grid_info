@@ -1959,39 +1959,37 @@ window.customCards = window.customCards || [];
 window.customCards.push(
   {
     type: 'xiaoshi-state-grid-table',
-    name: '国网卡片:表格',
+    name: '消逝国网卡片:表格',
     description: '国网表格',
     preview: true
   },
   {
     type: 'xiaoshi-state-grid-calendar',
-    name: '国网卡片:日历',
+    name: '消逝国网卡片:日历',
     description: '国网日历',
     preview: true
   },
   {
     type: 'xiaoshi-state-grid-chart-day',
-    name: '国网卡片:日图表',
+    name: '消逝国网卡片:日图表',
     description: '国网日图表',
     preview: true
   },
   {
     type: 'xiaoshi-state-grid-chart-month',
-    name: '国网卡片:月图表',
+    name: '消逝国网卡片:月图表',
     description: '国网月图表',
     preview: true
   },
   {
     type: 'xiaoshi-state-grid-phone',
-    name: '国网卡片:手机端',
-    description: '国网手机端UI',
-    preview: true
+    name: '消逝国网卡片:手机端聚合UI',
+    description: '国网手机端UI'
   },
   {
     type: 'xiaoshi-state-grid-pad',
-    name: '国网卡片:平板端',
-    description: '国网平板端UI',
-    preview: true
+    name: '消逝国网卡片:平板端聚合UI',
+    description: '国网平板端UI'
   }
 );
  

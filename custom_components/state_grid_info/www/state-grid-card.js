@@ -1,4 +1,4 @@
-console.info("%c 国网信息卡 \n%c   v 1.1   ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: dimgray");
+console.info("%c 国网信息卡 \n%c   v 2.0   ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 import tinycolor from "./tinycolor.js";
 
@@ -431,7 +431,7 @@ class StateGridNodeRed extends LitElement {
     `;
   }
 }
-customElements.define('state-grid-table', StateGridNodeRed);
+customElements.define('xiaoshi-state-grid-table', StateGridNodeRed);
 
 class StateGridCalendar extends LitElement {
   static get properties() {
@@ -850,7 +850,7 @@ class StateGridCalendar extends LitElement {
     this._handleClick();
   }
 }
-customElements.define('state-grid-calendar', StateGridCalendar);
+customElements.define('xiaoshi-state-grid-calendar', StateGridCalendar);
 
 class StateGridChartDay extends LitElement {
   static get properties() {
@@ -1283,7 +1283,7 @@ class StateGridChartDay extends LitElement {
     }
   }
 }
-customElements.define('state-grid-chart-day', StateGridChartDay);
+customElements.define('xiaoshi-state-grid-chart-day', StateGridChartDay);
 
 class StateGridChartMonth extends LitElement {
   static get properties() { 
@@ -1754,7 +1754,7 @@ class StateGridChartMonth extends LitElement {
     }
   }
 } 
-customElements.define('state-grid-chart-month', StateGridChartMonth);
+customElements.define('xiaoshi-state-grid-chart-month', StateGridChartMonth);
 
 class StateGridPhone extends LitElement {
   static get properties() {
@@ -1804,7 +1804,7 @@ class StateGridPhone extends LitElement {
     const bodyHeight =  this.config.height;
     return html`
       <div class="card-container" style="width: ${this.config.width};">
-        <state-grid-table 
+        <xiaoshi-state-grid-table 
           .hass=${this.hass}
           .config=${this.config}
 					.entity=${this.config.entity}
@@ -1815,8 +1815,8 @@ class StateGridPhone extends LitElement {
           .colorCost=${config.color_cost}
           .cardwidth=${config.cardwidth}
           .cardheight=${config.cardheight}>
-        </state-grid-table>
-        <state-grid-calendar 
+        </xiaoshi-state-grid-table>
+        <xiaoshi-state-grid-calendar 
           .hass=${this.hass}
           .config=${this.config}
 					.entity=${this.config.entity}
@@ -1824,8 +1824,8 @@ class StateGridPhone extends LitElement {
           .height=${bodyHeight}
           .colorNum=${config.color_num}
           .colorCost=${config.color_cost}>
-        </state-grid-calendar>
-        <state-grid-chart-day 
+        </xiaoshi-state-grid-calendar>
+        <xiaoshi-state-grid-chart-day 
           .hass=${this.hass}
           .config=${this.config}
 					.entity=${this.config.entity}
@@ -1833,8 +1833,8 @@ class StateGridPhone extends LitElement {
           .height=${bodyHeight}
           .colorNum=${config.color_num}
           .colorCost=${config.color_cost}>
-        </state-grid-chart-day>
-        <state-grid-chart-month 
+        </xiaoshi-state-grid-chart-day>
+        <xiaoshi-state-grid-chart-month 
           .hass=${this.hass}
           .config=${this.config}
 					.entity=${this.config.entity}
@@ -1842,12 +1842,12 @@ class StateGridPhone extends LitElement {
           .height=${bodyHeight}
           .colorNum=${config.color_num}
           .colorCost=${config.color_cost}>
-        </state-grid-chart-month>
+        </xiaoshi-state-grid-chart-month>
       </div>
     `;
   }
 }
-customElements.define('state-grid-phone', StateGridPhone);
+customElements.define('xiaoshi-state-grid-phone', StateGridPhone);
 
 class StateGridPad extends LitElement {
   static get properties() {
@@ -1910,7 +1910,7 @@ class StateGridPad extends LitElement {
     return html`
       <div class="grid-container">
         <div class="grid-item a">
-          <state-grid-table
+          <xiaoshi-state-grid-table
             .hass=${this.hass}
             .config=${config}
 						.entity=${this.config.entity}
@@ -1919,76 +1919,76 @@ class StateGridPad extends LitElement {
             .colorCost=${config.color_cost}
             .cardwidth=${config.cardwidth}
             .cardheight=${config.cardheight}>
-          </state-grid-table>
+          </xiaoshi-state-grid-table>
         </div>
         <div class="grid-item b">
-          <state-grid-calendar
+          <xiaoshi-state-grid-calendar
             .hass=${this.hass}
             .config=${config}
 						.entity=${this.config.entity}
             .colorNum=${config.color_num}
             .colorCost=${config.color_cost}>
-          </state-grid-calendar>
+          </xiaoshi-state-grid-calendar>
         </div>
         <div class="grid-item c">
-          <state-grid-chart-day
+          <xiaoshi-state-grid-chart-day
             .hass=${this.hass}
             .config=${config}
 						.entity=${this.config.entity}
             .colorNum=${config.color_num}
             .colorCost=${config.color_cost}>
-          </state-grid-chart-day>
+          </xiaoshi-state-grid-chart-day>
         </div>
         <div class="grid-item d">
-          <state-grid-chart-month
+          <xiaoshi-state-grid-chart-month
             .hass=${this.hass}
             .config=${config}
 						.entity=${this.config.entity}
             .colorNum=${config.color_num}
             .colorCost=${config.color_cost}>
-          </state-grid-chart-month>
+          </xiaoshi-state-grid-chart-month>
         </div>
       
       </div>
     `;
   }
 }
-customElements.define('state-grid-pad', StateGridPad);
+customElements.define('xiaoshi-state-grid-pad', StateGridPad);
 
 window.customCards = window.customCards || [];
 window.customCards.push(
   {
-    type: 'state-grid-table',
+    type: 'xiaoshi-state-grid-table',
     name: '国网卡片:表格',
     description: '国网表格',
     preview: true
   },
   {
-    type: 'state-grid-calendar',
+    type: 'xiaoshi-state-grid-calendar',
     name: '国网卡片:日历',
     description: '国网日历',
     preview: true
   },
   {
-    type: 'state-grid-chart-day',
+    type: 'xiaoshi-state-grid-chart-day',
     name: '国网卡片:日图表',
     description: '国网日图表',
     preview: true
   },
   {
-    type: 'state-grid-chart-month',
+    type: 'xiaoshi-state-grid-chart-month',
     name: '国网卡片:月图表',
     description: '国网月图表',
     preview: true
   },
   {
-    type: 'state-grid-phone',
+    type: 'xiaoshi-state-grid-phone',
     name: '国网卡片:手机端',
     description: '国网手机端UI',
     preview: true
   },
   {
-    type: 'state-grid-pad',
+    type: 'xiaoshi-state-grid-pad',
     name: '国网卡片:平板端',
     description: '国网平板端UI',
     preview: true

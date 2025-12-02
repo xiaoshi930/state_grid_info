@@ -887,6 +887,8 @@ class StateGridChartDay extends LitElement {
     this.colorNum = '#0fccc3';
     this.colorCost = '#804aff';
     this.config = {};
+    this._chart = null;
+    this._apexReady = false;
   }
 
   static get styles() {
@@ -942,8 +944,22 @@ class StateGridChartDay extends LitElement {
     `;
   }
 
+  updated(changedProps) {
+    if (changedProps.has('entity')) {
+      if (!this._apexReady) {
+        this._loadApexCharts().then(() => {
+          this._apexReady = true;
+          this._renderChart();
+        });
+        return;
+      }
+      this._renderChart();
+    }
+  }
+
   async firstUpdated() { 
     await this._loadApexCharts();
+    this._apexReady = true;
     this._renderChart();
   }
 
@@ -1320,6 +1336,8 @@ class StateGridChartMonth extends LitElement {
     this.colorNum = '#0fccc3';
     this.colorCost = '#804aff'; 
     this.config = {};
+    this._chart = null;
+    this._apexReady = false;
   }
 
   static get styles() {
@@ -1375,8 +1393,22 @@ class StateGridChartMonth extends LitElement {
     `;
   }
  
+  updated(changedProps) {
+    if (changedProps.has('entity')) {
+      if (!this._apexReady) {
+        this._loadApexCharts().then(() => {
+          this._apexReady = true;
+          this._renderChart();
+        });
+        return;
+      }
+      this._renderChart();
+    }
+  }
+
   async firstUpdated() { 
     await this._loadApexCharts();
+    this._apexReady = true;
     this._renderChart();
   }
 
@@ -1762,13 +1794,22 @@ class StateGridPhone extends LitElement {
       hass: { type: Object },
       config: { type: Object },
       selectedDate: { type: String },
-      todayDate: { type: String }
+      todayDate: { type: String },
+      activeEntity: { type: String },
+      entities: { type: Array },
+      activeTabIndex: { type: Number }
     };
   }
 
   setConfig(config) {
+    const entities = Array.isArray(config?.entities)
+      ? config.entities
+          .map(item => typeof item === 'string' ? { entity: item } : item)
+          .filter(item => item && item.entity)
+      : [];
+    const defaultEntity = config?.entity || entities[0]?.entity || 'sensor.state_grid';
     this.config = {
-      entity: config?.entity || 'sensor.state_grid',
+      entity: defaultEntity,
       theme: config?.theme || 'on',
       width: config?.width || '100%',
       height: config?.height || '300px',
@@ -1776,14 +1817,58 @@ class StateGridPhone extends LitElement {
       cardheight: config?.cardheight || '35px',
       color_num: config?.color_num || '#0fccc3',
       color_cost: config?.color_cost || '#804aff',
-      ...config
-    }; 
+      entities,
+      ...config,
+      entity: defaultEntity,
+      entities
+    };
+    this.entities = entities;
+    this.activeEntity = defaultEntity;
+    this.activeTabIndex = 0;
   }
 
   static get styles() {
     return css`
       :host {
         display: block;
+      }
+      .card-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .entity-tabs {
+        display: grid;
+        grid-auto-flow: column;
+        grid-template-columns: repeat(var(--tab-count, 1), 1fr);
+        align-items: stretch;
+        width: 100%;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .entity-tab {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 10px;
+        border: none;
+        background: transparent;
+        color: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+        opacity: 0.65;
+      }
+      .entity-tab:hover {
+        background: var(--tab-hover-bg, rgba(0,0,0,0.05));
+      }
+      .entity-tab.active {
+        background: var(--tab-active-bg, rgba(0,0,0,0.08));
+        color: var(--tab-active-color, currentColor);
+        border-bottom-color: currentColor;
+        opacity: 1;
+        font-weight: 800;
       }
       .card-container {
         display: flex;
@@ -1802,49 +1887,115 @@ class StateGridPhone extends LitElement {
     };
 
     const bodyHeight =  this.config.height;
+    const theme = this._evaluateTheme();
+    const backgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
+    const textColor = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
+    const hoverBg = theme === 'on' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)';
+    const activeBg = config.color_num || '#0fccc3';
+    const activeColor = theme === 'on' ? '#ffffff' : '#ffffff';
+    const tabs = Array.isArray(this.entities) ? this.entities : [];
+    const hasTabs = tabs.length > 1;
+    const activeIndex = Math.min(Math.max(this.activeTabIndex || 0, 0), Math.max(tabs.length - 1, 0));
+    const currentEntity = tabs.length
+      ? (tabs[activeIndex]?.entity || this.activeEntity || this.config.entity)
+      : (this.activeEntity || this.config.entity);
+    const mergedConfig = this.config?.entity === currentEntity
+      ? this.config
+      : { ...this.config, entity: currentEntity };
+
     return html`
-      <div class="card-container" style="width: ${this.config.width};">
-        <xiaoshi-state-grid-table 
+      <div class="card-wrapper" style="width: ${this.config.width};">
+        ${hasTabs ? html`
+          <div class="entity-tabs"
+               style="background: ${backgColor}; color: ${textColor}; --tab-count: ${tabs.length}; --tab-hover-bg: ${hoverBg}; --tab-active-bg: ${activeBg}; --tab-active-color: ${activeColor};">
+            ${tabs.map((item, index) => {
+              const entityId = item.entity || currentEntity;
+              const isActive = index === activeIndex;
+              const label = item.name || item.label || item.tab_name || this._getFriendlyName(entityId) || entityId;
+              const icon = item.icon || item.tab_icon;
+              return html`
+                <button class="entity-tab ${isActive ? 'active' : ''}" @click=${() => this._switchEntity(entityId, index)}>
+                  ${icon ? html`<ha-icon .icon=${icon}></ha-icon>` : ''}
+                  <span>${label}</span>
+                </button>
+              `;
+            })}
+          </div>
+        ` : ''}
+        <div class="card-container" style="width: 100%;">
+        <xiaoshi-state-grid-table
           .hass=${this.hass}
-          .config=${this.config}
-					.entity=${this.config.entity}
-          .width=${this.config.width}
+          .config=${mergedConfig}
+ 					.entity=${currentEntity}
+          .width=${mergedConfig.width}
           .height=${bodyHeight}
-          .icon=${this.config.icon}
+          .icon=${mergedConfig.icon}
           .colorNum=${config.color_num}
           .colorCost=${config.color_cost}
           .cardwidth=${config.cardwidth}
           .cardheight=${config.cardheight}>
         </xiaoshi-state-grid-table>
-        <xiaoshi-state-grid-calendar 
+        <xiaoshi-state-grid-calendar
           .hass=${this.hass}
-          .config=${this.config}
-					.entity=${this.config.entity}
-          .width=${this.config.width}
+          .config=${mergedConfig}
+ 					.entity=${currentEntity}
+          .width=${mergedConfig.width}
           .height=${bodyHeight}
           .colorNum=${config.color_num}
           .colorCost=${config.color_cost}>
         </xiaoshi-state-grid-calendar>
-        <xiaoshi-state-grid-chart-day 
+        <xiaoshi-state-grid-chart-day
           .hass=${this.hass}
-          .config=${this.config}
-					.entity=${this.config.entity}
-          .width=${this.config.width}
+          .config=${mergedConfig}
+ 					.entity=${currentEntity}
+          .width=${mergedConfig.width}
           .height=${bodyHeight}
           .colorNum=${config.color_num}
           .colorCost=${config.color_cost}>
         </xiaoshi-state-grid-chart-day>
-        <xiaoshi-state-grid-chart-month 
+        <xiaoshi-state-grid-chart-month
           .hass=${this.hass}
-          .config=${this.config}
-					.entity=${this.config.entity}
-          .width=${this.config.width}
+          .config=${mergedConfig}
+ 					.entity=${currentEntity}
+          .width=${mergedConfig.width}
           .height=${bodyHeight}
           .colorNum=${config.color_num}
           .colorCost=${config.color_cost}>
         </xiaoshi-state-grid-chart-month>
+        </div>
       </div>
     `;
+  }
+
+  _evaluateTheme() {
+    try {
+      if (!this.config || !this.config.theme) return 'on';
+      if (typeof this.config.theme === 'function') {
+        return this.config.theme();
+      }
+      if (typeof this.config.theme === 'string' &&
+          (this.config.theme.includes('return') || this.config.theme.includes('=>'))) {
+        return (new Function(`return ${this.config.theme}`))();
+      }
+      return this.config.theme;
+    } catch(e) {
+      console.error('主题计算时出错:', e);
+      return 'on';
+    }
+  }
+
+  _getFriendlyName(entityId) {
+    if (!entityId || !this.hass || !this.hass.states) return '';
+    return this.hass.states[entityId]?.attributes?.friendly_name || '';
+  }
+
+  _switchEntity(entityId, index = 0) {
+    if (!entityId) return;
+    this.activeTabIndex = index;
+    this.activeEntity = entityId;
+    if (this.config?.entity !== entityId) {
+      this.config = { ...this.config, entity: entityId };
+    }
   }
 }
 customElements.define('xiaoshi-state-grid-phone', StateGridPhone);
@@ -1854,12 +2005,21 @@ class StateGridPad extends LitElement {
     return {
       hass: { type: Object },
       config: { type: Object },
+      activeEntity: { type: String },
+      entities: { type: Array },
+      activeTabIndex: { type: Number },
     };
   }
 
   setConfig(config) {
+    const entities = Array.isArray(config?.entities)
+      ? config.entities
+          .map(item => typeof item === 'string' ? { entity: item } : item)
+          .filter(item => item && item.entity)
+      : [];
+    const defaultEntity = config?.entity || entities[0]?.entity || 'sensor.state_grid';
     this.config = {
-      entity: config?.entity || 'sensor.state_grid',
+      entity: defaultEntity,
       theme: config?.theme || 'on',
       width: config?.width || '380px',
       height: config?.height || '300px',
@@ -1867,8 +2027,14 @@ class StateGridPad extends LitElement {
       cardheight: config?.cardheight || '35px',
       color_num: config?.color_num || '#0fccc3',
       color_cost: config?.color_cost || '#804aff',
-      ...config
+      entities,
+      ...config,
+      entity: defaultEntity,
+      entities
     };
+    this.entities = entities;
+    this.activeEntity = defaultEntity;
+    this.activeTabIndex = 0;
   }
  
   static get styles() {
@@ -1876,6 +2042,45 @@ class StateGridPad extends LitElement {
       :host {
         display: block;
       } 
+      .pad-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        width: max-content;
+      }
+      .entity-tabs {
+        display: grid;
+        grid-auto-flow: column;
+        grid-template-columns: repeat(var(--tab-count, 1), 1fr);
+        align-items: stretch;
+        width: 100%;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .entity-tab {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 10px;
+        border: none;
+        background: transparent;
+        color: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+        opacity: 0.65;
+      }
+      .entity-tab:hover {
+        background: var(--tab-hover-bg, rgba(0,0,0,0.05));
+      }
+      .entity-tab.active {
+        background: var(--tab-active-bg, rgba(0,0,0,0.08));
+        color: var(--tab-active-color, currentColor);
+        border-bottom-color: currentColor;
+        opacity: 1;
+        font-weight: 800;
+      }
       .grid-container {
         display: grid;
         grid-template-areas: 
@@ -1906,15 +2111,48 @@ class StateGridPad extends LitElement {
     const config = {
       ...this.config
     };
+    const theme = this._evaluateTheme();
+    const backgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
+    const textColor = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
+    const hoverBg = theme === 'on' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)';
+    const activeBg = config.color_num || '#0fccc3';
+    const activeColor = theme === 'on' ? '#ffffff' : '#ffffff';
+    const tabs = Array.isArray(this.entities) ? this.entities : [];
+    const hasTabs = tabs.length > 1;
+    const activeIndex = Math.min(Math.max(this.activeTabIndex || 0, 0), Math.max(tabs.length - 1, 0));
+    const currentEntity = tabs.length
+      ? (tabs[activeIndex]?.entity || this.activeEntity || this.config.entity)
+      : (this.activeEntity || this.config.entity);
+    const mergedConfig = this.config?.entity === currentEntity
+      ? this.config
+      : { ...this.config, entity: currentEntity };
 
     return html`
+      <div class="pad-wrapper">
+        ${hasTabs ? html`
+          <div class="entity-tabs"
+               style="background: ${backgColor}; color: ${textColor}; --tab-count: ${tabs.length}; --tab-hover-bg: ${hoverBg}; --tab-active-bg: ${activeBg}; --tab-active-color: ${activeColor};">
+            ${tabs.map((item, index) => {
+              const entityId = item.entity || currentEntity;
+              const isActive = index === activeIndex;
+              const label = item.name || item.label || item.tab_name || this._getFriendlyName(entityId) || entityId;
+              const icon = item.icon || item.tab_icon;
+              return html`
+                <button class="entity-tab ${isActive ? 'active' : ''}" @click=${() => this._switchEntity(entityId, index)}>
+                  ${icon ? html`<ha-icon .icon=${icon}></ha-icon>` : ''}
+                  <span>${label}</span>
+                </button>
+              `;
+            })}
+          </div>
+        ` : ''}
       <div class="grid-container">
         <div class="grid-item a">
           <xiaoshi-state-grid-table
             .hass=${this.hass}
-            .config=${config}
-						.entity=${this.config.entity}
-            .icon=${this.config.icon}
+            .config=${mergedConfig}
+ 			.entity=${currentEntity}
+            .icon=${mergedConfig.icon}
             .colorNum=${config.color_num}
             .colorCost=${config.color_cost}
             .cardwidth=${config.cardwidth}
@@ -1924,8 +2162,8 @@ class StateGridPad extends LitElement {
         <div class="grid-item b">
           <xiaoshi-state-grid-calendar
             .hass=${this.hass}
-            .config=${config}
-						.entity=${this.config.entity}
+            .config=${mergedConfig}
+ 			.entity=${currentEntity}
             .colorNum=${config.color_num}
             .colorCost=${config.color_cost}>
           </xiaoshi-state-grid-calendar>
@@ -1933,8 +2171,8 @@ class StateGridPad extends LitElement {
         <div class="grid-item c">
           <xiaoshi-state-grid-chart-day
             .hass=${this.hass}
-            .config=${config}
-						.entity=${this.config.entity}
+            .config=${mergedConfig}
+ 			.entity=${currentEntity}
             .colorNum=${config.color_num}
             .colorCost=${config.color_cost}>
           </xiaoshi-state-grid-chart-day>
@@ -1942,15 +2180,47 @@ class StateGridPad extends LitElement {
         <div class="grid-item d">
           <xiaoshi-state-grid-chart-month
             .hass=${this.hass}
-            .config=${config}
-						.entity=${this.config.entity}
+            .config=${mergedConfig}
+ 			.entity=${currentEntity}
             .colorNum=${config.color_num}
             .colorCost=${config.color_cost}>
           </xiaoshi-state-grid-chart-month>
         </div>
-      
+
+      </div>
       </div>
     `;
+  }
+
+  _evaluateTheme() {
+    try {
+      if (!this.config || !this.config.theme) return 'on';
+      if (typeof this.config.theme === 'function') {
+        return this.config.theme();
+      }
+      if (typeof this.config.theme === 'string' &&
+          (this.config.theme.includes('return') || this.config.theme.includes('=>'))) {
+        return (new Function(`return ${this.config.theme}`))();
+      }
+      return this.config.theme;
+    } catch(e) {
+      console.error('主题计算时出错:', e);
+      return 'on';
+    }
+  }
+
+  _getFriendlyName(entityId) {
+    if (!entityId || !this.hass || !this.hass.states) return '';
+    return this.hass.states[entityId]?.attributes?.friendly_name || '';
+  }
+
+  _switchEntity(entityId, index = 0) {
+    if (!entityId) return;
+    this.activeTabIndex = index;
+    this.activeEntity = entityId;
+    if (this.config?.entity !== entityId) {
+      this.config = { ...this.config, entity: entityId };
+    }
   }
 }
 customElements.define('xiaoshi-state-grid-pad', StateGridPad);

@@ -2933,6 +2933,14 @@ class StateGridPhone extends LitElement {
         padding: 0px;
       }
 
+      .balance-count.warning {
+        color: #F44336;
+      }
+
+      .balance-count.warning {
+        color: #F44336;
+      }
+
       .balance-devices-list {
         flex: 1;
         overflow-y: auto;
@@ -3037,6 +3045,13 @@ class StateGridPhone extends LitElement {
     const fgColor = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
     const bgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
     
+    // 计算总金额的预警状态
+    const totalAmount = this._calculateTotalAmount();
+    let totalAmountWarning = false;
+    if (this.config.global_warning && this.config.global_warning.trim() !== '') {
+      totalAmountWarning = this._evaluateWarningCondition(totalAmount, this.config.global_warning);
+    }
+    
     return html`
       <div class="card-container" style="width: ${this.config.width};">
         <!-- 国王信息卡片 -->
@@ -3046,50 +3061,52 @@ class StateGridPhone extends LitElement {
               <span class="balance-indicator" style="background: rgb(0,222,220); animation: pulse 2s infinite"></span>
               ${this.config.balance_name || '国网信息'}
             </div>
-            <div class="balance-count">
-              ￥ ${this._calculateTotalAmount()} 元
+            <div class="balance-count ${totalAmountWarning ? 'warning' : ''}">
+              ￥ ${totalAmount} 元
             </div>
           </div>
           
-          <div class="balance-devices-list">
-            ${this._balanceLoading ? 
-              html`<div class="balance-loading">加载中...</div>` :
-              
-              this._balanceData.length === 0 ? 
-                html`<div class="balance-no-devices">请配置国网实体</div>` :
-                html`
-                  ${this._balanceData.map(balanceData => {
-                    // 明细预警优先级最高
-                    let isWarning = false;
-                    
-                    // 首先检查明细预警，如果存在且满足条件，直接设为预警状态
-                    if (balanceData.warning_threshold && balanceData.warning_threshold.trim() !== '') {
-                      isWarning = this._evaluateWarningCondition(balanceData.value, balanceData.warning_threshold); 
-                    } else {
-                      // 只有在没有明细预警时才检查全局预警
-                      if (this.config.global_warning && this.config.global_warning.trim() !== '') {
-                        isWarning = this._evaluateWarningCondition(balanceData.value, this.config.global_warning);
+          ${this._balanceData.length > 1 ? html`
+            <div class="balance-devices-list">
+              ${this._balanceLoading ? 
+                html`<div class="balance-loading">加载中...</div>` :
+                
+                this._balanceData.length === 0 ? 
+                  html`<div class="balance-no-devices">请配置国网实体</div>` :
+                  html`
+                    ${this._balanceData.map(balanceData => {
+                      // 明细预警优先级最高
+                      let isWarning = false;
+                      
+                      // 首先检查明细预警，如果存在且满足条件，直接设为预警状态
+                      if (balanceData.warning_threshold && balanceData.warning_threshold.trim() !== '') {
+                        isWarning = this._evaluateWarningCondition(balanceData.value, balanceData.warning_threshold); 
+                      } else {
+                        // 只有在没有明细预警时才检查全局预警
+                        if (this.config.global_warning && this.config.global_warning.trim() !== '') {
+                          isWarning = this._evaluateWarningCondition(balanceData.value, this.config.global_warning);
+                        }
                       }
-                    }
-                    
-                    const isSelected = this._selectedBalanceEntity === balanceData.entity_id;
-                    
-                    return html`
-                      <div class="balance-device-item ${isSelected ? 'selected' : ''}" @click=${() => this._handleBalanceEntityClick(balanceData)}>
-                        <div class="balance-device-left">
-                          <ha-icon class="balance-device-icon" icon="${balanceData.icon}"></ha-icon>
-                          <div class="balance-device-name">${balanceData.friendly_name}</div>
+                      
+                      const isSelected = this._selectedBalanceEntity === balanceData.entity_id;
+                      
+                      return html`
+                        <div class="balance-device-item ${isSelected ? 'selected' : ''}" @click=${() => this._handleBalanceEntityClick(balanceData)}>
+                          <div class="balance-device-left">
+                            <ha-icon class="balance-device-icon" icon="${balanceData.icon}"></ha-icon>
+                            <div class="balance-device-name">${balanceData.friendly_name}</div>
+                          </div>
+                          <div class="balance-device-value ${isWarning ? 'warning' : ''}">
+                            ${balanceData.value}
+                            <span class="balance-device-unit ${isWarning ? 'warning' : ''}">${balanceData.unit}</span>
+                          </div>
                         </div>
-                        <div class="balance-device-value ${isWarning ? 'warning' : ''}">
-                          ${balanceData.value}
-                          <span class="balance-device-unit ${isWarning ? 'warning' : ''}">${balanceData.unit}</span>
-                        </div>
-                      </div>
-                    `;
-                  })}
-                `
-            }
-          </div>
+                      `;
+                    })}
+                  `
+              }
+            </div>
+          ` : ''}
         </div>
 
         <xiaoshi-state-grid-table 
@@ -3446,6 +3463,10 @@ class StateGridPad extends LitElement {
         padding: 0px;
       }
 
+      .balance-count.warning {
+        color: #F44336;
+      }
+
       .balance-devices-list {
         width: calc(var(--width, 380px) * 2 - 27px);
         display: flex;
@@ -3561,6 +3582,13 @@ class StateGridPad extends LitElement {
     const fgColor = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
     const bgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
     
+    // 计算总金额的预警状态
+    const totalAmount = this._calculateTotalAmount();
+    let totalAmountWarning = false;
+    if (this.config.global_warning && this.config.global_warning.trim() !== '') {
+      totalAmountWarning = this._evaluateWarningCondition(totalAmount, this.config.global_warning);
+    }
+    
 
     return html`
       <div class="card-container" style="width: ${this.config.width};">
@@ -3571,50 +3599,52 @@ class StateGridPad extends LitElement {
               <span class="balance-indicator" style="background: rgb(0,222,220); animation: pulse 2s infinite"></span>
               ${this.config.balance_name || '国网信息'}
             </div>
-            <div class="balance-count">
-              ￥ ${this._calculateTotalAmount()} 元
+            <div class="balance-count ${totalAmountWarning ? 'warning' : ''}">
+              ￥ ${totalAmount} 元
             </div>
           </div>
 
-          <div class="balance-devices-list">
-            ${this._balanceLoading ? 
-              html`<div class="balance-loading">加载中...</div>` :
-              
-              this._balanceData.length === 0 ? 
-                html`<div class="balance-no-devices">请配置国网实体</div>` :
-                html`
-                  ${this._balanceData.map(balanceData => {
-                    // 明细预警优先级最高
-                    let isWarning = false;
-                    
-                    // 首先检查明细预警，如果存在且满足条件，直接设为预警状态
-                    if (balanceData.warning_threshold && balanceData.warning_threshold.trim() !== '') {
-                      isWarning = this._evaluateWarningCondition(balanceData.value, balanceData.warning_threshold); 
-                    } else {
-                      // 只有在没有明细预警时才检查全局预警
-                      if (this.config.global_warning && this.config.global_warning.trim() !== '') {
-                        isWarning = this._evaluateWarningCondition(balanceData.value, this.config.global_warning);
+          ${this._balanceData.length > 1 ? html`
+            <div class="balance-devices-list">
+              ${this._balanceLoading ? 
+                html`<div class="balance-loading">加载中...</div>` :
+                
+                this._balanceData.length === 0 ? 
+                  html`<div class="balance-no-devices">请配置国网实体</div>` :
+                  html`
+                    ${this._balanceData.map(balanceData => {
+                      // 明细预警优先级最高
+                      let isWarning = false;
+                      
+                      // 首先检查明细预警，如果存在且满足条件，直接设为预警状态
+                      if (balanceData.warning_threshold && balanceData.warning_threshold.trim() !== '') {
+                        isWarning = this._evaluateWarningCondition(balanceData.value, balanceData.warning_threshold); 
+                      } else {
+                        // 只有在没有明细预警时才检查全局预警
+                        if (this.config.global_warning && this.config.global_warning.trim() !== '') {
+                          isWarning = this._evaluateWarningCondition(balanceData.value, this.config.global_warning);
+                        }
                       }
-                    }
-                    
-                    const isSelected = this._selectedBalanceEntity === balanceData.entity_id;
-                    
-                    return html`
-                      <div class="balance-device-item ${isSelected ? 'selected' : ''}" @click=${() => this._handleBalanceEntityClick(balanceData)}>
-                        <div class="balance-device-left">
-                          <ha-icon class="balance-device-icon" icon="${balanceData.icon}"></ha-icon>
-                          <div class="balance-device-name">${balanceData.friendly_name}</div>
+                      
+                      const isSelected = this._selectedBalanceEntity === balanceData.entity_id;
+                      
+                      return html`
+                        <div class="balance-device-item ${isSelected ? 'selected' : ''}" @click=${() => this._handleBalanceEntityClick(balanceData)}>
+                          <div class="balance-device-left">
+                            <ha-icon class="balance-device-icon" icon="${balanceData.icon}"></ha-icon>
+                            <div class="balance-device-name">${balanceData.friendly_name}</div>
+                          </div>
+                          <div class="balance-device-value ${isWarning ? 'warning' : ''}">
+                            ${balanceData.value}
+                            <span class="balance-device-unit ${isWarning ? 'warning' : ''}">${balanceData.unit}</span>
+                          </div>
                         </div>
-                        <div class="balance-device-value ${isWarning ? 'warning' : ''}">
-                          ${balanceData.value}
-                          <span class="balance-device-unit ${isWarning ? 'warning' : ''}">${balanceData.unit}</span>
-                        </div>
-                      </div>
-                    `;
-                  })}
-                `
-            }
-          </div>
+                      `;
+                    })}
+                  `
+              }
+            </div>
+          ` : ''}
         </div>
     
         <div class="grid-container" style="--width: ${this.config.width}; --height: ${this.config.height};">

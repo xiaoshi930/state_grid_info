@@ -1346,6 +1346,7 @@ class StateGridInfoSensor(SensorEntity):
         self._attr_unique_id = f"state_grid_{consumer_number}"
         self._attr_icon = "mdi:flash"        
         self._attr_name = f"国家电网 {consumer_number}"
+        self._attr_native_unit_of_measurement = "元"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, f"state_grid_{consumer_number}")},
             "name": f"国家电网 {consumer_number}",

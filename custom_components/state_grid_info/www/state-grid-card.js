@@ -3251,30 +3251,6 @@ customElements.define('xiaoshi-state-grid-pad', StateGridPad);
 window.customCards = window.customCards || [];
 window.customCards.push(
   {
-    type: 'xiaoshi-state-grid-table',
-    name: '消逝国网卡片:表格',
-    description: '国网表格',
-    preview: true
-  },
-  {
-    type: 'xiaoshi-state-grid-calendar',
-    name: '消逝国网卡片:日历',
-    description: '国网日历',
-    preview: true
-  },
-  {
-    type: 'xiaoshi-state-grid-chart-day',
-    name: '消逝国网卡片:日图表',
-    description: '国网日图表',
-    preview: true
-  },
-  {
-    type: 'xiaoshi-state-grid-chart-month',
-    name: '消逝国网卡片:月图表',
-    description: '国网月图表',
-    preview: true
-  },
-  {
     type: 'xiaoshi-state-grid-phone',
     name: '消逝国网卡片:手机端聚合UI',
     description: '国网手机端UI'

@@ -17,6 +17,7 @@ class StateGridNodeRed extends LitElement {
       colorNum: { type: String, attribute: true },
       colorCost: { type: String, attribute: true },
       _layoutStyle: { type: String, state: true },
+      entity: { type: String },
     };
   }
 
@@ -31,14 +32,22 @@ class StateGridNodeRed extends LitElement {
     this.style.setProperty('--title-font-size', this.config.titleFontSize || '20px'); 
     if (config.color_num !== undefined) this.colorNum = config.color_num;
     if (config.color_cost !== undefined) this.colorCost = config.color_cost;
+    if (config.entity !== undefined) {
+      const oldEntity = this.entity;
+      this.entity = config.entity;
+      // 如果entity发生变化，重新加载数据
+      if (oldEntity !== this.entity && this.hass) {
+        this._fetchData();
+      }
+    }
     this._updateLayout();
   }
 
   constructor() {
     super();
     this.hass = null;
+    this.entity = 'sensor.state_grid';
     this.config = {
-      entity: 'sensor.state_grid',
       title: '电费信息',
       theme: 'on',
       width: '380px',
@@ -65,7 +74,6 @@ class StateGridNodeRed extends LitElement {
     return css`
       :host {
         display: block;
-        --title-font-size: 20px;
       }
       .card-container {
         border: 0;
@@ -76,7 +84,8 @@ class StateGridNodeRed extends LitElement {
         justify-items: center;
         align-items: center;
         gap: 0px;
-        margin: 0px;
+        margin: 0 0 0 0;
+
       }
       .light-theme {
         background: rgb(255,255,255);
@@ -86,17 +95,9 @@ class StateGridNodeRed extends LitElement {
         background: rgb(50,50,50);
         color: rgb(255,255,255);
       }
-      .title {
-        grid-area: title;
-        font-size: var(--title-font-size);
-        font-weight: bold;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 10px;
-      }
-      .refresh-time {
-        grid-area: refresh-time;
+
+      .refresh {
+        grid-area: refresh;
         font-size: 13px;
         font-weight: bold;
         display: flex;
@@ -106,10 +107,15 @@ class StateGridNodeRed extends LitElement {
         justify-self: start;
       }
       .refresh-button {
+        grid-area: refresh-button;
         margin-left: 7px;
         cursor: pointer;
         color: rgb(0,200,200);
         transition: transform 1s ease;
+        display: flex;
+        align-items: flex-end;
+        align-items: flex-end;
+        justify-content: flex-end;
       }
       .refresh-button.rotating {
         transform: rotate(360deg);
@@ -118,8 +124,8 @@ class StateGridNodeRed extends LitElement {
         from { transform: rotate(0deg); }
         to { transform: rotate(360deg); }
       }
-      .data-date {
-        grid-area: data-date;
+      .date {
+        grid-area: date;
         font-size: 13px;
         font-weight: bold;
         display: flex;
@@ -128,14 +134,7 @@ class StateGridNodeRed extends LitElement {
         padding-left: 5px;
         justify-self: start;
       }
-      .balance {
-        grid-area: balance;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        width: var(--card-width, 55px);
-      }
+
       .data-item {
         display: flex;
         flex-direction: column;
@@ -225,11 +224,19 @@ class StateGridNodeRed extends LitElement {
     const visibleColumns = this._getVisibleColumns();
     const columnCount = visibleColumns.length;
     this.cardwidth = this.config.cardwidth || this._getDefaultCardWidth(columnCount);
-    const middleColumnsCount = columnCount - 2;
-    let gridTemplateAreas = `
-      "a title ${Array(middleColumnsCount + 1 ).fill('title').join(' ')} b"   
-      "a refresh-time ${Array(middleColumnsCount).fill('refresh-time').join(' ')} balance b"   
-      "a data-date ${Array(middleColumnsCount).fill('data-date').join(' ')} balance b"`;
+    
+    // 动态生成中间列的区域名
+    const middleColumns = [];
+    if (visibleColumns.includes('t')) middleColumns.push('title');
+    if (visibleColumns.includes('p')) middleColumns.push('title');
+    if (visibleColumns.includes('n')) middleColumns.push('title');
+    if (visibleColumns.includes('v')) middleColumns.push('title');
+    
+    let gridTemplateAreas = ` 
+      ". . ${middleColumns.map(() => '.').join(' ')} . ."   
+      "a refresh ${middleColumns.map(() => 'refresh').join(' ')} refresh-button b"   
+      "a date ${middleColumns.map(() => 'date').join(' ')} date b"`;
+    
     const periods = ['daily', 'monthly', 'last-month', 'yearly'];
     periods.forEach(period => {
       let row = `"a ${period}-total`;
@@ -240,16 +247,19 @@ class StateGridNodeRed extends LitElement {
       row += ` ${period}-cost b"`;
       gridTemplateAreas += `\n${row}`;
     });
-    const gridTemplateColumns = `3px auto ${visibleColumns.map(() => 'auto').join(' ')} auto 3px`;
+
+    gridTemplateAreas += `". . ${middleColumns.map(() => '.').join(' ')} . ."`;
+
+    const gridTemplateColumns = `3px auto ${['t', 'p', 'n', 'v'].map(col => visibleColumns.includes(col) ? 'auto' : ' ').join(' ')} auto 3px`;
     this._layoutStyle = `
       grid-template-areas: ${gridTemplateAreas};
       grid-template-columns: ${gridTemplateColumns};
-      grid-template-rows: auto auto auto auto auto auto auto;
+      grid-template-rows: 10px auto auto auto auto auto auto 10px;
     `;
   } 
 
   updated(changedProperties) {
-    if (changedProperties.has('hass') || changedProperties.has('config')) {
+    if (changedProperties.has('config') || changedProperties.has('entity')) {
       this._fetchData();
       this._updateLayout();
     }
@@ -272,13 +282,13 @@ class StateGridNodeRed extends LitElement {
   _setupInterval() {
     this._interval = setInterval(() => {
       this._fetchData();
-    }, 60000);
+    }, 10000);
   }
 
   async _fetchData() {
-    if (!this.hass || !this.config.entity) return;
+    if (!this.hass || !this.entity) return;
     try {
-      const entity = this.hass.states[this.config.entity];
+      const entity = this.hass.states[this.entity];
       if (!entity) return;
       const attributes = entity.attributes || {};
       const dayData = attributes.daylist?.[0] || {};
@@ -288,7 +298,6 @@ class StateGridNodeRed extends LitElement {
       this._data = {
         refresh_time: attributes.date || 'N/A',
         daily_lasted_date: dayData.day || 'N/A',
-        balance: entity.state || 'N/A',
         dayEleNum: dayData.dayEleNum || '0',
         daily_t_ele_num: dayData.dayTPq || '0',
         daily_p_ele_num: dayData.dayPPq || '0',
@@ -331,12 +340,6 @@ class StateGridNodeRed extends LitElement {
     }, 1000);
   }
 
-  _formatBalance(balance) {
-    return balance >= 20 ? 
-      `${balance}元` : 
-      html`<span class="warning">${balance}元</span>`;
-  }
-
   _evaluateTheme() {
     try {
       if (!this.config || !this.config.theme) return 'on';
@@ -367,18 +370,15 @@ class StateGridNodeRed extends LitElement {
     return html`
       <div class="card-container ${themeClass}"\n
            style="height: ${this.config.height}; width: ${this.config.width};--border-radius: ${this.border};--card-width: ${this.cardwidth};--card-height: ${this.cardheight};${this._layoutStyle}">
-        <div class="title">${this.config.title || '电费信息'}</div>
-        <div class="refresh-time">
+        <div class="refresh">
           用电刷新时间：${this._data.refresh_time || 'N/A'}
-          ${this.config.button ? html`
-          <ha-icon class="refresh-button ${this._isRefreshing ? 'rotating' : ''}"\n icon="mdi:refresh"\n @click=${this._handleRefresh}\n title="手动刷新数据"></ha-icon>
-          ` : ''}
         </div>
-        <div class="data-date">
+        ${this.config.button ? html`
+        <ha-icon class="refresh-button ${this._isRefreshing ? 'rotating' : ''}"\n icon="mdi:refresh"\n @click=${this._handleRefresh}\n title="手动刷新数据">
+        </ha-icon>
+        ` : ''}
+        <div class="date">
           最新用电日期：${this._data.daily_lasted_date || 'N/A'}
-        </div>
-        <div class="balance">
-          ${this._renderDataItem(this.config.balance_name || '电费余额', 'mdi:cash', this._formatBalance(this._data.balance), itemThemeClass, null, this.colorCost)}
         </div>
         ${this._renderDataItem('日总用电', 'mdi:lightning-bolt', `${this._data.dayEleNum || '0'}°`, itemThemeClass, 'daily-total', this.colorNum)}
         ${showT ? this._renderDataItem('日尖用电', 'mdi:lightning-bolt', `${this._data.daily_t_ele_num || '0'}°`, itemThemeClass, 'daily-t', this.colorNum) : ''}
@@ -457,7 +457,14 @@ class StateGridCalendar extends LitElement {
       if (config.height !== undefined) this.height = config.height;
       if (config.year !== undefined) this.year = config.year;
       if (config.month !== undefined) this.month = config.month;
-      if (config.entity !== undefined) this.entity = config.entity;
+      if (config.entity !== undefined) {
+        const oldEntity = this.entity;
+        this.entity = config.entity;
+        // 如果entity发生变化，重新加载数据
+        if (oldEntity !== this.entity && this.hass) {
+          this.updateDayData();
+        }
+      }
       if (config.color_num !== undefined) this.colorNum = config.color_num;
       if (config.color_cost !== undefined) this.colorCost = config.color_cost;
       this.requestUpdate();
@@ -871,7 +878,14 @@ class StateGridChartDay extends LitElement {
     if (config) {
       if (config.width !== undefined) this.width = config.width;
       if (config.height !== undefined) this.height = config.height;
-      if (config.entity !== undefined) this.entity = config.entity;
+      if (config.entity !== undefined) {
+        const oldEntity = this.entity;
+        this.entity = config.entity;
+        // 如果entity发生变化，重新加载数据
+        if (oldEntity !== this.entity && this.hass) {
+          this._loadData();
+        }
+      }
       if (config.color_num !== undefined) this.colorNum = config.color_num;
       if (config.color_cost !== undefined) this.colorCost = config.color_cost;
       this.requestUpdate();
@@ -956,6 +970,11 @@ class StateGridChartDay extends LitElement {
         document.head.appendChild(script);
       });
     }
+  }
+
+  _loadData() {
+    // 重新渲染图表，数据会在_renderChart中通过_processedData获取
+    this._renderChart();
   }
 
   get _processedData() {
@@ -1275,6 +1294,19 @@ class StateGridChartDay extends LitElement {
     `;
   }
 
+  updated(changedProperties) {
+    super.updated(changedProperties);
+    
+    // 只在entity变化时重新渲染图表，避免频繁刷新
+    if (changedProperties.has('entity')) {
+      console.log('StateGridChartDay: entity changed, re-rendering chart');
+      // 延迟执行图表重渲染，确保DOM已更新
+      setTimeout(() => {
+        this._renderChart();
+      }, 0);
+    }
+  }
+
   disconnectedCallback() {
     super.disconnectedCallback();
     if (this._chart) {
@@ -1304,7 +1336,14 @@ class StateGridChartMonth extends LitElement {
     if (config) {
       if (config.width !== undefined) this.width = config.width;
       if (config.height !== undefined) this.height = config.height;
-      if (config.entity !== undefined) this.entity = config.entity;
+      if (config.entity !== undefined) {
+        const oldEntity = this.entity;
+        this.entity = config.entity;
+        // 如果entity发生变化，重新加载数据
+        if (oldEntity !== this.entity && this.hass) {
+          this._loadData();
+        }
+      }
       if (config.color_num !== undefined) this.colorNum = config.color_num;
       if (config.color_cost !== undefined) this.colorCost = config.color_cost;
       this.requestUpdate();
@@ -1389,6 +1428,11 @@ class StateGridChartMonth extends LitElement {
         document.head.appendChild(script);
       });
     }
+  }
+
+  _loadData() {
+    // 重新渲染图表，数据会在_renderChart中通过_processedData获取
+    this._renderChart();
   }
 
   get _processedData() {
@@ -1746,6 +1790,19 @@ class StateGridChartMonth extends LitElement {
     `;
   }
 
+  updated(changedProperties) {
+    super.updated(changedProperties);
+    
+    // 只在entity变化时重新渲染图表，避免频繁刷新
+    if (changedProperties.has('entity')) {
+      console.log('StateGridChartMonth: entity changed, re-rendering chart');
+      // 延迟执行图表重渲染，确保DOM已更新
+      setTimeout(() => {
+        this._renderChart();
+      }, 0);
+    }
+  }
+
   disconnectedCallback() {
     super.disconnectedCallback(); 
     if (this._chart) {
@@ -1756,19 +1813,858 @@ class StateGridChartMonth extends LitElement {
 } 
 customElements.define('xiaoshi-state-grid-chart-month', StateGridChartMonth);
 
+class StateGridPhoneEditor extends LitElement {
+  static get properties() {
+    return {
+      hass: { type: Object },
+      config: { type: Object },
+      _buttonSearchTerm: { type: String },
+      _filteredButtons: { type: Array },
+      _showButtonList: { type: Boolean },
+      _balanceSearchTerm: { type: String },
+      _filteredBalanceEntities: { type: Array },
+      _showBalanceEntityList: { type: Boolean }
+    };
+  }
+
+  static get styles() {
+    return css`
+      .form {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 16px;
+      }
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      label {
+        font-weight: bold;
+        font-size: 14px;
+        color: var(--primary-text-color);
+      }
+      select, input {
+        padding: 6px 12px;
+        border: 1px solid var(--primary-color);
+        border-radius: 4px;
+        background: var(--card-background-color);
+        color: var(--primary-text-color);
+        font-size: 14px;
+      }
+      .help-text {
+        font-size: 12px;
+        color: var(--secondary-text-color);
+        margin-top: 4px;
+      }
+      .color-input-wrapper {
+        display: flex;
+        gap: 3px;
+        align-items: center;
+      }
+      .color-input {
+        width: 70px;
+        height: 36px;
+        border: 1px solid var(--primary-color);
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .color-text {
+        flex: 1;
+        height: 22px;
+      }
+      .entity-selector {
+        position: relative;
+      }
+      .entity-search-input {
+        width: 70%;
+        padding: 6px 12px;
+        border: 1px solid var(--primary-color);
+        border-radius: 4px;
+        background: var(--card-background-color);
+        color: var(--primary-text-color);
+        box-sizing: border-box;
+      }
+      .entity-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        height: 200px;
+        overflow-y: auto;
+        background: var(--card-background-color);
+        border: 1px solid var(--primary-color);
+        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        z-index: 1000;
+        margin-top: 4px;
+      }
+      .entity-option {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 2px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--divider-color);
+      }
+      .entity-option:hover {
+        background: var(--secondary-background-color);
+      }
+      .entity-option.selected {
+        background: var(--primary-color);
+        color: var(--text-primary-color);
+      }
+      .entity-info {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: 1;
+      }
+      .entity-details {
+        flex: 1;
+      }
+      .entity-name {
+        font-weight: 500;
+        font-size: 14px;
+      }
+      .entity-id {
+        font-size: 12px;
+        opacity: 0.7;
+        font-family: monospace;
+      }
+      .check-icon {
+        color: var(--success-color);
+      }
+      .no-results {
+        padding: 6px;
+        text-align: center;
+        color: var(--secondary-text-color);
+        font-style: italic;
+      }
+      .checkbox-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        cursor: pointer;
+        color: var(--primary-text-color);
+        margin: 0 24px;
+      }
+      .checkbox-icon {
+        margin: 0;
+      }
+
+      .checkbox-label input[type="checkbox"] {
+        width: auto;
+        padding: 0;
+      }
+
+      /* 余额实体选择器样式 */
+      .balance-entity-section {
+        border-top: 1px solid var(--divider-color);
+        padding-top: 16px;
+        margin-top: 16px;
+      }
+
+      .balance-entity-search {
+        width: 100%;
+        padding: 6px 12px;
+        border: 1px solid var(--primary-color);
+        border-radius: 4px;
+        background: var(--card-background-color);
+        color: var(--primary-text-color);
+        box-sizing: border-box;
+        margin-bottom: 8px;
+      }
+
+      .selected-balance-entities {
+        margin-top: 12px;
+      }
+
+      .selected-balance-label {
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 8px;
+        color: var(--primary-text-color);
+      }
+
+      .selected-balance-entity {
+        margin-bottom: 12px;
+        border: 1px solid var(--divider-color);
+        border-radius: 4px;
+        padding: 8px;
+        background: var(--card-background-color);
+      }
+
+      .balance-entity-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        font-size: 12px;
+        color: var(--primary-text-color);
+      }
+
+      .balance-entity-info {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: 1;
+      }
+
+      .balance-entity-name {
+        font-weight: 500;
+      }
+
+      .balance-entity-id {
+        opacity: 0.7;
+        font-family: monospace;
+      }
+
+      .remove-balance-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 2px;
+        color: var(--secondary-text-color);
+      }
+
+      .remove-balance-btn:hover {
+        color: var(--error-color);
+      }
+
+      .balance-entity-overrides {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .override-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .override-row label {
+        font-size: 12px;
+        font-weight: normal;
+        min-width: 60px;
+        margin: 0;
+      }
+
+      .override-row input {
+        flex: 1;
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+
+      .balance-name-input {
+        width: 100%;
+        padding: 6px 12px;
+        border: 1px solid var(--primary-color);
+        border-radius: 4px;
+        background: var(--card-background-color);
+        color: var(--primary-text-color);
+        box-sizing: border-box;
+        margin-bottom: 8px;
+      }
+    `;
+  }
+
+  render() {
+    if (!this.hass) return html``;
+
+    return html`
+      <div class="form">
+        <div class="form-group">
+          <label class="entity-selector">
+            青龙脚本刷新实体：
+            <input 
+              type="text" 
+              @input=${this._onButtonSearch}
+              @focus=${this._onButtonSearch}
+              .value=${this._buttonSearchTerm || this.config.button }
+              placeholder="搜索或输入按钮实体ID..."
+              class="entity-search-input"
+            /></label>
+            ${this._showButtonList ? html`
+              <div class="entity-dropdown">
+                ${this._filteredButtons.map(entity => html`
+                  <div 
+                    class="entity-option ${this.config.button === entity.entity_id ? 'selected' : ''}"
+                    @click=${() => this._selectButton(entity.entity_id)}
+                  >
+                    <div class="entity-info">
+                      <ha-icon icon="${entity.attributes?.icon || 'mdi:refresh'}"></ha-icon>
+                      <div class="entity-details">
+                        <div class="entity-name">${entity.attributes?.friendly_name || entity.entity_id}</div>
+                        <div class="entity-id">${entity.entity_id}</div>
+                      </div>
+                    </div>
+                    ${this.config.button === entity.entity_id ? 
+                      html`<ha-icon icon="mdi:check" class="check-icon"></ha-icon>` : ''}
+                  </div>
+                `)}
+                ${this._filteredButtons.length === 0 ? html`
+                  <div class="no-results">未找到匹配的按钮</div>
+                ` : ''}
+              </div>
+            ` : ''}
+        </div>
+
+        <div class="form-group">
+          <label>主题：
+          <select 
+            @change=${this._valueChanged}
+            .value=${this.config.theme !== undefined ? this.config.theme : 'on'}
+            name="theme"
+          >
+            <option value="on">浅色主题</option>
+            <option value="off">深色主题</option>
+          </select>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label>每个模块宽度：
+          <input 
+            type="text" 
+            @change=${this._valueChanged}
+            .value=${this.config.width !== undefined ? this.config.width : '100%'}
+            name="width"
+            placeholder="100%"
+            </label>
+        </div>
+
+        <div class="form-group">
+          <label>每个模块高度：
+          <input 
+            type="text" 
+            @change=${this._valueChanged}
+            .value=${this.config.height !== undefined ? this.config.height : '300px'}
+            name="height"
+            placeholder="300px"
+           </label>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label checkbox-icon">
+            数据表格内是否显示图标：
+            <input 
+              type="checkbox" 
+              @change=${this._checkboxChanged}
+              .checked=${this.config.icon !== 'none'}
+              name="icon"
+            />
+          </label>
+        </div>
+
+
+        <div class="form-group">
+          <label class="color-text">数据表格内每个格子的宽度：
+          <input 
+            type="text" 
+            @change=${this._valueChanged}
+            .value=${this.config.cardwidth !== undefined ? this.config.cardwidth : ''}
+            name="cardwidth"
+            placeholder=""
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label class="color-text">数据表格内每个格子的高度：
+          <input 
+            type="text" 
+            @change=${this._valueChanged}
+            .value=${this.config.cardheight !== undefined ? this.config.cardheight : '35px'}
+            name="cardheight"
+            placeholder="35px"
+            </label>
+        </div>
+
+        <div class="form-group">
+            <label class="color-input-wrapper">用电量数据颜色：
+              <input 
+                type="color" 
+                @change=${this._valueChanged}
+                .value=${this.config.color_num !== undefined ? this.config.color_num : '#0fccc3'}
+                name="color_num"
+                class="color-input"
+              />
+              <input 
+                type="text" 
+                @change=${this._valueChanged}
+                .value=${this.config.color_num !== undefined ? this.config.color_num : '#0fccc3'}
+                name="color_num"
+                class="color-text"
+                placeholder="#0fccc3"
+              />
+          </label>
+        </div>
+
+        <div class="form-group">
+        <label class="color-input-wrapper">用电费数据颜色：
+            <input 
+              type="color" 
+              @change=${this._valueChanged}
+              .value=${this.config.color_cost !== undefined ? this.config.color_cost : '#804aff'}
+              name="color_cost"
+              class="color-input"
+            />
+            <input 
+              type="text" 
+              @change=${this._valueChanged}
+              .value=${this.config.color_cost !== undefined ? this.config.color_cost : '#804aff'}
+              name="color_cost"
+              class="color-text"
+              placeholder="#804aff"
+            />
+            </label>
+        </div>
+
+        <div class="form-group">
+          <label>表格内电量时段显示控制</label>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                @change=${this._checkboxChanged}
+                .checked=${this.config.n_num === 'none'}
+                name="n_num"
+              />
+              隐藏平段电量
+            </label>
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                @change=${this._checkboxChanged}
+                .checked=${this.config.t_num === 'none'}
+                name="t_num"
+              />
+              隐藏尖段电量
+            </label>
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                @change=${this._checkboxChanged}
+                .checked=${this.config.p_num === 'none'}
+                name="p_num"
+              />
+              隐藏峰段电量
+            </label>
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                @change=${this._checkboxChanged}
+                .checked=${this.config.v_num === 'none'}
+                name="v_num"
+              />
+              隐藏谷段电量
+            </label>
+          </div>
+        </div>
+
+        <!-- 余额实体配置 -->
+        <div class="balance-entity-section">
+          <div class="form-group">
+            <label>国网信息标题：</label>
+            <input 
+              type="text" 
+              @change=${this._valueChanged}
+              .value=${this.config.balance_name !== undefined ? this.config.balance_name : '国网信息'}
+              name="balance_name"
+              placeholder="国网信息"
+              class="balance-name-input"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>全局预警条件：</label>
+            <input 
+              type="text" 
+              @change=${this._valueChanged}
+              .value=${this.config.global_warning !== undefined ? this.config.global_warning : ''}
+              name="global_warning"
+              placeholder="例如: <10 或 <=0 或 ==off"
+              class="balance-name-input"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>添加余额实体：</label>
+            <input 
+              type="text" 
+              @input=${this._onBalanceEntitySearch}
+              @focus=${this._onBalanceEntitySearch}
+              .value=${this._balanceSearchTerm || ''}
+              placeholder="搜索或输入实体ID..."
+              class="balance-entity-search"
+            />
+            ${this._showBalanceEntityList ? html`
+              <div class="entity-dropdown">
+                ${this._filteredBalanceEntities.map(entity => html`
+                  <div 
+                    class="entity-option ${this._isBalanceEntitySelected(entity.entity_id) ? 'selected' : ''}"
+                    @click=${() => this._selectBalanceEntity(entity.entity_id)}
+                  >
+                    <div class="entity-info">
+                      <ha-icon icon="${entity.attributes?.icon || 'mdi:help-circle'}"></ha-icon>
+                      <div class="entity-details">
+                        <div class="entity-name">${entity.attributes?.friendly_name || entity.entity_id}</div>
+                        <div class="entity-id">${entity.entity_id}</div>
+                      </div>
+                    </div>
+                    ${this._isBalanceEntitySelected(entity.entity_id) ? 
+                      html`<ha-icon icon="mdi:check" class="check-icon"></ha-icon>` : ''}
+                  </div>
+                `)}
+                ${this._filteredBalanceEntities.length === 0 ? html`
+                  <div class="no-results">未找到匹配的实体</div>` : ''}
+              </div>
+            ` : ''}
+          </div>
+
+          ${this.config.entities && this.config.entities.length > 0 ? html`
+            <div class="selected-balance-entities">
+              <div class="selected-balance-label">已选择的余额实体：</div>
+              ${this.config.entities.map((entityConfig, index) => {
+                const entity = this.hass.states[entityConfig.entity_id];
+                const friendlyName = entityConfig.overrides?.name || entity?.attributes?.friendly_name || entityConfig.entity_id;
+                
+                return html`
+                  <div class="selected-balance-entity">
+                    <div class="balance-entity-header">
+                      <div class="balance-entity-info">
+                        <ha-icon icon="${entity?.attributes?.icon || 'mdi:help-circle'}"></ha-icon>
+                        <div>
+                          <div class="balance-entity-name">${friendlyName}</div>
+                          <div class="balance-entity-id">${entityConfig.entity_id}</div>
+                        </div>
+                      </div>
+                      <button 
+                        class="remove-balance-btn"
+                        @click=${() => this._removeBalanceEntity(index)}
+                      >
+                        <ha-icon icon="mdi:close"></ha-icon>
+                      </button>
+                    </div>
+                    
+                    <div class="balance-entity-overrides">
+                      <div class="override-row">
+                        <label>显示名称:</label>
+                        <input 
+                          type="text" 
+                          .value=${entityConfig.overrides?.name || ''}
+                          @input=${(e) => this._updateBalanceEntityOverride(index, 'name', e.target.value)}
+                          placeholder="留空使用默认名称"
+                        />
+                      </div>
+                      <div class="override-row">
+                        <label>单位:</label>
+                        <input 
+                          type="text" 
+                          .value=${entityConfig.overrides?.unit || ''}
+                          @input=${(e) => this._updateBalanceEntityOverride(index, 'unit', e.target.value)}
+                          placeholder="留空使用默认单位"
+                        />
+                      </div>
+                      <div class="override-row">
+                        <label>图标:</label>
+                        <input 
+                          type="text" 
+                          .value=${entityConfig.overrides?.icon || ''}
+                          @input=${(e) => this._updateBalanceEntityOverride(index, 'icon', e.target.value)}
+                          placeholder="例如: mdi:water"
+                        />
+                      </div>
+                      <div class="override-row">
+                        <label>预警条件:</label>
+                        <input 
+                          type="text" 
+                          .value=${entityConfig.warning_threshold || ''}
+                          @input=${(e) => this._updateBalanceEntityWarning(index, e.target.value)}
+                          placeholder="例如: <10 或 <=0"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                `;
+              })}
+            </div>
+          ` : ''}
+        </div>
+
+      </div>
+    `;
+  }
+
+  _valueChanged(e) {
+    const { name, value } = e.target;
+    if (!value) return;
+    
+    this.config = {
+      ...this.config,
+      [name]: value
+    };
+    
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config: this.config },
+      bubbles: true,
+      composed: true
+    }));
+  }
+
+  _checkboxChanged(e) {
+    const { name, checked } = e.target;
+    
+    this.config = {
+      ...this.config,
+      [name]: checked ? 'none' : ''
+    };
+    
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config: this.config },
+      bubbles: true,
+      composed: true
+    }));
+  }
+
+
+
+  _onButtonSearch(e) {
+    const searchTerm = e.target.value.toLowerCase();
+    this._buttonSearchTerm = searchTerm;
+    this._showButtonList = true;
+    
+    if (!this.hass) return;
+    
+    const allEntities = Object.values(this.hass.states);
+    
+    this._filteredButtons = allEntities.filter(entity => {
+      const entityId = entity.entity_id.toLowerCase();
+      const friendlyName = (entity.attributes.friendly_name || '').toLowerCase();
+      
+      // 优先显示button.开头的实体，或者包含refresh、button等关键词的实体
+      const isButtonEntity = entityId.startsWith('button.') || entityId.startsWith('input_button.');
+      const isRefreshEntity = entityId.includes('refresh') || entityId.includes('reload') || entityId.includes('update');
+      const matchesSearch = entityId.includes(searchTerm) || friendlyName.includes(searchTerm);
+      
+      return (isButtonEntity || isRefreshEntity) && matchesSearch;
+    }).slice(0, 20);
+    
+    this.requestUpdate();
+  }
+
+  _selectButton(buttonId) {
+    this.config = {
+      ...this.config,
+      button: buttonId
+    };
+    
+    this._buttonSearchTerm = ''; // 清除搜索词，让输入框显示选中的实体ID
+    
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config: this.config },
+      bubbles: true,
+      composed: true
+    }));
+    
+    this._showButtonList = false;
+    this.requestUpdate();
+  }
+
+  _checkboxChanged(e) {
+    const { name, checked } = e.target;
+    
+    this.config = {
+      ...this.config,
+      [name]: checked ? 'none' : ''
+    };
+    
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config: this.config },
+      bubbles: true,
+      composed: true
+    }));
+  }
+
+  firstUpdated() {
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.balance-entity-section')) {
+        this._showButtonList = false;
+        this._showBalanceEntityList = false;
+        this.requestUpdate();
+      }
+    });
+  }
+
+  constructor() {
+    super();
+    this._buttonSearchTerm = '';
+    this._filteredButtons = [];
+    this._showButtonList = false;
+    this._balanceSearchTerm = '';
+    this._filteredBalanceEntities = [];
+    this._showBalanceEntityList = false;
+  }
+
+  setConfig(config) {
+    this.config = { ...config };
+  }
+
+  // 余额实体相关方法
+  _onBalanceEntitySearch(e) {
+    const searchTerm = e.target.value.toLowerCase();
+    this._balanceSearchTerm = searchTerm;
+    this._showBalanceEntityList = true;
+    
+    if (!this.hass) return;
+    
+    const allEntities = Object.values(this.hass.states);
+    
+    this._filteredBalanceEntities = allEntities.filter(entity => {
+      const entityId = entity.entity_id.toLowerCase();
+      const friendlyName = (entity.attributes.friendly_name || '').toLowerCase();
+      
+      // 过滤掉已经选择的实体
+      const isAlreadySelected = this._isBalanceEntitySelected(entity.entity_id);
+      
+      // 优先显示sensor.开头的实体
+      const isSensorEntity = entityId.startsWith('sensor.');
+      const matchesSearch = entityId.includes(searchTerm) || friendlyName.includes(searchTerm);
+      
+      return isSensorEntity && matchesSearch && !isAlreadySelected;
+    }).slice(0, 20);
+    
+    this.requestUpdate();
+  }
+
+  _isBalanceEntitySelected(entityId) {
+    return this.config.entities && this.config.entities.some(entity => entity.entity_id === entityId);
+  }
+
+  _selectBalanceEntity(entityId) {
+    const currentEntities = this.config.entities || [];
+    
+    // 添加新的余额实体配置
+    const newEntity = {
+      entity_id: entityId,
+      overrides: {
+        name: '',
+        unit: '',
+        icon: ''
+      },
+      warning_threshold: ''
+    };
+    
+    this.config = {
+      ...this.config,
+      entities: [...currentEntities, newEntity]
+    };
+    
+    this._balanceSearchTerm = '';
+    
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config: this.config },
+      bubbles: true,
+      composed: true
+    }));
+    
+    this._showBalanceEntityList = false;
+    this.requestUpdate();
+  }
+
+  _removeBalanceEntity(index) {
+    const currentEntities = this.config.entities || [];
+    const newEntities = currentEntities.filter((_, i) => i !== index);
+    
+    this.config = {
+      ...this.config,
+      entities: newEntities
+    };
+    
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config: this.config },
+      bubbles: true,
+      composed: true
+    }));
+    
+    this.requestUpdate();
+  }
+
+  _updateBalanceEntityOverride(index, field, value) {
+    const currentEntities = this.config.entities || [];
+    const newEntities = [...currentEntities];
+    
+    if (!newEntities[index].overrides) {
+      newEntities[index].overrides = {};
+    }
+    
+    if (value.trim() === '') {
+      delete newEntities[index].overrides[field];
+    } else {
+      newEntities[index].overrides[field] = value;
+    }
+    
+    this.config = {
+      ...this.config,
+      entities: newEntities
+    };
+    
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config: this.config },
+      bubbles: true,
+      composed: true
+    }));
+  }
+
+  _updateBalanceEntityWarning(index, value) {
+    const currentEntities = this.config.entities || [];
+    const newEntities = [...currentEntities];
+    
+    if (value.trim() === '') {
+      delete newEntities[index].warning_threshold;
+    } else {
+      newEntities[index].warning_threshold = value;
+    }
+    
+    this.config = {
+      ...this.config,
+      entities: newEntities
+    };
+    
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config: this.config },
+      bubbles: true,
+      composed: true
+    }));
+  }
+}
+customElements.define('xiaoshi-state-grid-phone-editor', StateGridPhoneEditor);
+
 class StateGridPhone extends LitElement {
   static get properties() {
     return {
       hass: { type: Object },
       config: { type: Object },
       selectedDate: { type: String },
-      todayDate: { type: String }
+      todayDate: { type: String },
+      _balanceData: { type: Array },
+      _balanceLoading: { type: Boolean },
+      _balanceRefreshInterval: { type: Number },
+      _selectedBalanceEntity: { type: String }
     };
   }
 
   setConfig(config) {
     this.config = {
-      entity: config?.entity || 'sensor.state_grid',
       theme: config?.theme || 'on',
       width: config?.width || '100%',
       height: config?.height || '300px',
@@ -1778,8 +2674,201 @@ class StateGridPhone extends LitElement {
       color_cost: config?.color_cost || '#804aff',
       ...config
     }; 
+    
+    // 配置更新时重新加载余额数据
+    if (this.hass) {
+      this._loadBalanceData();
+    }
+  }
+  
+  constructor() {
+    super();
+    this._balanceData = [];
+    this._balanceLoading = false;
+    this._balanceRefreshInterval = null;
+    this._selectedBalanceEntity = '';
+  }
+  
+  static getConfigElement() {
+    return document.createElement("xiaoshi-state-grid-phone-editor");
   }
 
+  connectedCallback() {
+    super.connectedCallback();
+    this._loadBalanceData();
+    
+    // 每300秒刷新一次数据
+    this._balanceRefreshInterval = setInterval(() => {
+      this._loadBalanceData();
+    }, 300000);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._balanceRefreshInterval) {
+      clearInterval(this._balanceRefreshInterval);
+    }
+  }
+
+  updated(changedProperties) {
+    super.updated(changedProperties);
+    
+    // 监听_selectedBalanceEntity的变化，立即触发更新
+    if (changedProperties.has('_selectedBalanceEntity')) {
+      console.log('StateGridPhone: _selectedBalanceEntity changed to', this._selectedBalanceEntity);
+      // 立即请求更新，确保子组件收到新的entity
+      this.requestUpdate();
+    }
+  }
+
+  async _loadBalanceData() {
+    if (!this.hass || !this.config.entities) return;
+    
+    this._balanceLoading = true;
+    this.requestUpdate();
+    
+    try {
+      const balanceData = [];
+      
+      for (const entityConfig of this.config.entities) {
+        const entity = this.hass.states[entityConfig.entity_id];
+        if (!entity) continue;
+        
+        let value = entity.state;
+        let unit = entityConfig.unit_of_measurement || entity.attributes.unit_of_measurement || '';
+        let friendlyName = entityConfig.name || entity.attributes.friendly_name || entity.entity_id;
+        let icon = entityConfig.icon || entity.attributes.icon || 'mdi:help-circle';
+        
+        // 应用覆盖配置
+        if (entityConfig.overrides) {
+          if (entityConfig.overrides.name && entityConfig.overrides.name.trim() !== '') {
+            friendlyName = entityConfig.overrides.name;
+          }
+          if (entityConfig.overrides.unit && entityConfig.overrides.unit.trim() !== '') {
+            unit = entityConfig.overrides.unit;
+          }
+        }
+        
+        balanceData.push({
+          entity_id: entityConfig.entity_id,
+          friendly_name: friendlyName,
+          value: value,
+          unit: unit,
+          icon: icon,
+          warning_threshold: entityConfig.warning_threshold || ''
+        });
+      }
+      
+      this._balanceData = balanceData;
+      
+      // 如果没有选中的实体，默认选中第一个
+      if (balanceData.length > 0 && !this._selectedBalanceEntity) {
+        this._selectedBalanceEntity = balanceData[0].entity_id;
+      }
+    } catch (error) {
+      console.error('加载国网实体数据失败:', error);
+    } finally {
+      this._balanceLoading = false;
+      this.requestUpdate();
+    }
+  }
+
+  _calculateTotalAmount() {
+    if (!this._balanceData || this._balanceData.length === 0) {
+      return '0.00';
+    }
+    
+    let total = 0;
+    for (const item of this._balanceData) {
+      const value = parseFloat(item.value);
+      if (!isNaN(value)) {
+        total += value;
+      }
+    }
+    
+    return total.toFixed(2);
+  }
+
+  _evaluateWarningCondition(value, condition) {
+    if (!condition || condition.trim() === '') return false;
+    
+    // 支持的操作符
+    const operators = ['>=', '<=', '>', '<', '==', '!='];
+    let operator = null;
+    let compareValue = '';
+    
+    // 查找操作符
+    for (const op of operators) {
+      if (condition.includes(op)) {
+        operator = op;
+        const parts = condition.split(op);
+        if (parts.length >= 2) {
+          compareValue = parts.slice(1).join(op).trim();
+        }
+        break;
+      }
+    }
+    
+    if (!operator) return false;
+    
+    // 移除比较值两端的引号（如果有的话）
+    if ((compareValue.startsWith('"') && compareValue.endsWith('"')) || 
+        (compareValue.startsWith("'") && compareValue.endsWith("'"))) {
+      compareValue = compareValue.slice(1, -1);
+    }
+    
+    // 尝试将值转换为数字
+    const numericValue = parseFloat(value);
+    const numericCompare = parseFloat(compareValue);
+    
+    // 如果两个值都是数字，进行数值比较
+    if (!isNaN(numericValue) && !isNaN(numericCompare)) {
+      switch (operator) {
+        case '>': return numericValue > numericCompare;
+        case '>=': return numericValue >= numericCompare;
+        case '<': return numericValue < numericCompare;
+        case '<=': return numericValue <= numericCompare;
+        case '==': return numericValue === numericCompare;
+        case '!=': return numericValue !== numericCompare;
+      }
+    }
+    
+    // 字符串比较
+    const stringValue = String(value);
+    const stringCompare = compareValue;
+    
+    switch (operator) {
+      case '==': return stringValue === stringCompare;
+      case '!=': return stringValue !== stringCompare;
+      case '>': return stringValue > stringCompare;
+      case '>=': return stringValue >= stringCompare;
+      case '<': return stringValue < stringCompare;
+      case '<=': return stringValue <= stringCompare;
+    }
+    
+    return false;
+  }
+
+  _handleBalanceEntityClick(balanceData) {
+    if (!balanceData.entity_id) return;
+    
+    // 切换选中的实体
+    const oldEntity = this._selectedBalanceEntity;
+    this._selectedBalanceEntity = balanceData.entity_id;
+    
+    // 只有当entity真正改变时才请求更新
+    if (oldEntity !== this._selectedBalanceEntity) {
+      console.log('Entity changed from', oldEntity, 'to', this._selectedBalanceEntity);
+      // 立即触发更新，确保子组件立即收到新的entity
+      this.requestUpdate();
+      
+      // 使用setTimeout确保在下一个事件循环中触发更新，避免延迟
+      setTimeout(() => {
+        this.requestUpdate();
+      }, 0);
+    }
+  }
+  
   static get styles() {
     return css`
       :host {
@@ -1789,6 +2878,147 @@ class StateGridPhone extends LitElement {
         display: flex;
         flex-direction: column;
         gap: 5px;
+      }
+      
+      /* 消逝余额卡片样式 */
+      .balance-card {
+        width: 100%;
+        background: var(--bg-color, #fff);
+        border-radius: 12px;
+      }
+
+      .balance-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px;
+        background: var(--bg-color, #fff);
+        border-radius: 12px;
+      }
+
+      .balance-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 8px;
+      }
+
+      @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+      }
+
+      .balance-title {
+        font-size: 20px;
+        font-weight: 500;
+        color: var(--fg-color, #000);
+        height: 30px;
+        line-height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /*标题统计数字*/
+      .balance-count {
+        color: var(--fg-color, #000);
+        border-radius: 8px;
+        font-size: 20px;
+        height: 30px;
+        line-height: 30px;
+        text-align: center;
+        line-height: 30px;
+        font-weight: bold;
+        padding: 0px;
+      }
+
+      .balance-devices-list {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+        padding: 0 0 8px 0;
+      }
+
+      .balance-device-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 0px 16px;
+        padding: 8px 0;
+        border-bottom: 1px solid rgb(150,150,150,0.5);
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      .balance-device-item:first-child {
+        border-top: 1px solid rgb(150,150,150,0.5);
+      }
+
+      .balance-device-item:hover {
+        background-color: rgba(150,150,150,0.1);
+      }
+
+      .balance-device-item.selected {
+        background-color: rgba(33, 150, 243, 0.2);
+        border-left: 3px solid rgb(33, 150, 243);
+      }
+
+      .balance-device-left {
+        display: flex;
+        align-items: center;
+        flex: 1;
+        min-width: 0;
+      }
+
+      .balance-device-icon {
+        margin-right: 12px;
+        color: var(--fg-color, #000);
+        flex-shrink: 0;
+      }
+
+      .balance-device-name {
+        color: var(--fg-color, #000);
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .balance-device-value {
+        color: var(--fg-color, #000);
+        font-size: 12px;
+        margin-left: auto;
+        flex-shrink: 0;
+        font-weight: bold;
+      }
+
+      .balance-device-value.warning {
+        color: #F44336;
+      }
+
+      .balance-device-unit {
+        font-size: 12px;
+        color: var(--fg-color, #000);
+        margin-left: 4px;
+        font-weight: bold;
+      }
+
+      .balance-device-unit.warning {
+        color: #F44336;
+      }
+
+      .balance-no-devices {
+        text-align: center;
+        padding: 10px 0;
+        color: var(--fg-color, #000);
+      }
+
+      .balance-loading {
+        text-align: center;
+        padding: 10px 0;
+        color: var(--fg-color, #000);
       }
     `;
   }
@@ -1802,12 +3032,71 @@ class StateGridPhone extends LitElement {
     };
 
     const bodyHeight =  this.config.height;
+    
+    // 获取主题和颜色
+    const theme = this.config.theme || 'on';
+    const fgColor = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
+    const bgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
+    
     return html`
       <div class="card-container" style="width: ${this.config.width};">
+        <!-- 国王信息卡片 -->
+        <div class="balance-card" style="--fg-color: ${fgColor}; --bg-color: ${bgColor};">
+          <div class="balance-header">
+            <div class="balance-title">
+              <span class="balance-indicator" style="background: rgb(0,222,220); animation: pulse 2s infinite"></span>
+              ${this.config.balance_name || '国网信息'}
+            </div>
+            <div class="balance-count">
+              ￥ ${this._calculateTotalAmount()} 元
+            </div>
+          </div>
+          
+          <div class="balance-devices-list">
+            ${this._balanceLoading ? 
+              html`<div class="balance-loading">加载中...</div>` :
+              
+              this._balanceData.length === 0 ? 
+                html`<div class="balance-no-devices">请配置国网实体</div>` :
+                html`
+                  ${this._balanceData.map(balanceData => {
+                    // 明细预警优先级最高
+                    let isWarning = false;
+                    
+                    // 首先检查明细预警，如果存在且满足条件，直接设为预警状态
+                    if (balanceData.warning_threshold && balanceData.warning_threshold.trim() !== '') {
+                      isWarning = this._evaluateWarningCondition(balanceData.value, balanceData.warning_threshold); 
+                    } else {
+                      // 只有在没有明细预警时才检查全局预警
+                      if (this.config.global_warning && this.config.global_warning.trim() !== '') {
+                        isWarning = this._evaluateWarningCondition(balanceData.value, this.config.global_warning);
+                      }
+                    }
+                    
+                    const isSelected = this._selectedBalanceEntity === balanceData.entity_id;
+                    
+                    return html`
+                      <div class="balance-device-item ${isSelected ? 'selected' : ''}" @click=${() => this._handleBalanceEntityClick(balanceData)}>
+                        <div class="balance-device-left">
+                          <ha-icon class="balance-device-icon" icon="${balanceData.icon}"></ha-icon>
+                          <div class="balance-device-name">${balanceData.friendly_name}</div>
+                        </div>
+                        <div class="balance-device-value ${isWarning ? 'warning' : ''}">
+                          ${balanceData.value}
+                          <span class="balance-device-unit ${isWarning ? 'warning' : ''}">${balanceData.unit}</span>
+                        </div>
+                      </div>
+                    `;
+                  })}
+                `
+            }
+          </div>
+        </div>
+
         <xiaoshi-state-grid-table 
           .hass=${this.hass}
           .config=${this.config}
-					.entity=${this.config.entity}
+					.entity=${this._selectedBalanceEntity}
           .width=${this.config.width}
           .height=${bodyHeight}
           .icon=${this.config.icon}
@@ -1816,33 +3105,37 @@ class StateGridPhone extends LitElement {
           .cardwidth=${config.cardwidth}
           .cardheight=${config.cardheight}>
         </xiaoshi-state-grid-table>
+
         <xiaoshi-state-grid-calendar 
           .hass=${this.hass}
           .config=${this.config}
-					.entity=${this.config.entity}
+					.entity=${this._selectedBalanceEntity}
           .width=${this.config.width}
           .height=${bodyHeight}
           .colorNum=${config.color_num}
           .colorCost=${config.color_cost}>
         </xiaoshi-state-grid-calendar>
+
         <xiaoshi-state-grid-chart-day 
           .hass=${this.hass}
           .config=${this.config}
-					.entity=${this.config.entity}
+					.entity=${this._selectedBalanceEntity}
           .width=${this.config.width}
           .height=${bodyHeight}
           .colorNum=${config.color_num}
           .colorCost=${config.color_cost}>
         </xiaoshi-state-grid-chart-day>
+
         <xiaoshi-state-grid-chart-month 
           .hass=${this.hass}
           .config=${this.config}
-					.entity=${this.config.entity}
+					.entity=${this._selectedBalanceEntity}
           .width=${this.config.width}
           .height=${bodyHeight}
           .colorNum=${config.color_num}
           .colorCost=${config.color_cost}>
         </xiaoshi-state-grid-chart-month>
+        
       </div>
     `;
   }

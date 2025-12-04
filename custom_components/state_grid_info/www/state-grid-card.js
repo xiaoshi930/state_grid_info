@@ -2046,6 +2046,17 @@ class StateGridPhoneEditor extends LitElement {
         margin-top: 8px;
       }
 
+      .override-config {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 2px;
+      }
+
+      .override-checkbox {
+        margin-right: 4px;
+      }
+
       .override-row {
         display: flex;
         align-items: center;
@@ -2063,6 +2074,21 @@ class StateGridPhoneEditor extends LitElement {
         flex: 1;
         padding: 4px 8px;
         font-size: 12px;
+      }
+
+      .override-label {
+        font-size: 11px;
+        color: #666;
+        white-space: nowrap;
+      }
+
+      .override-input {
+        flex: 1;
+        padding: 2px 6px;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+        font-size: 11px;
+        box-sizing: border-box;
       }
 
       .balance-name-input {
@@ -2357,42 +2383,78 @@ class StateGridPhoneEditor extends LitElement {
                     </div>
                     
                     <div class="balance-entity-overrides">
-                      <div class="override-row">
-                        <label>显示名称:</label>
+                      <div class="override-config">
+                        <input 
+                          type="checkbox" 
+                          class="override-checkbox"
+                          @change=${(e) => this._updateEntityOverride(index, 'name', e.target.checked)}
+                          .checked=${entityConfig.overrides?.name !== undefined}
+                        />
+                        <span class="override-label">名称:</span>
                         <input 
                           type="text" 
+                          class="override-input"
+                          @change=${(e) => this._updateEntityOverrideValue(index, 'name', e.target.value)}
                           .value=${entityConfig.overrides?.name || ''}
-                          @input=${(e) => this._updateBalanceEntityOverride(index, 'name', e.target.value)}
-                          placeholder="留空使用默认名称"
+                          placeholder="自定义名称"
+                          ?disabled=${entityConfig.overrides?.name === undefined}
                         />
                       </div>
-                      <div class="override-row">
-                        <label>单位:</label>
+
+                      <div class="override-config">
+                        <input 
+                          type="checkbox" 
+                          class="override-checkbox"
+                          @change=${(e) => this._updateEntityOverride(index, 'unit', e.target.checked)}
+                          .checked=${entityConfig.overrides?.unit !== undefined}
+                        />
+                        <span class="override-label">单位:</span>
                         <input 
                           type="text" 
+                          class="override-input"
+                          @change=${(e) => this._updateEntityOverrideValue(index, 'unit', e.target.value)}
                           .value=${entityConfig.overrides?.unit || ''}
-                          @input=${(e) => this._updateBalanceEntityOverride(index, 'unit', e.target.value)}
-                          placeholder="留空使用默认单位"
+                          placeholder="自定义单位"
+                          ?disabled=${entityConfig.overrides?.unit === undefined}
                         />
                       </div>
-                      <div class="override-row">
-                        <label>图标:</label>
+
+                      <div class="override-config">
+                        <input 
+                          type="checkbox" 
+                          class="override-checkbox"
+                          @change=${(e) => this._updateEntityOverride(index, 'icon', e.target.checked)}
+                          .checked=${entityConfig.overrides?.icon !== undefined}
+                        />
+                        <span class="override-label">图标:</span>
                         <input 
                           type="text" 
+                          class="override-input"
+                          @change=${(e) => this._updateEntityOverrideValue(index, 'icon', e.target.value)}
                           .value=${entityConfig.overrides?.icon || ''}
-                          @input=${(e) => this._updateBalanceEntityOverride(index, 'icon', e.target.value)}
-                          placeholder="例如: mdi:water"
+                          placeholder="mdi:icon-name"
+                          ?disabled=${entityConfig.overrides?.icon === undefined}
                         />
                       </div>
-                      <div class="override-row">
-                        <label>预警条件:</label>
+
+                      <div class="override-config">
+                        <input 
+                          type="checkbox" 
+                          class="override-checkbox"
+                          @change=${(e) => this._updateEntityOverride(index, 'warning', e.target.checked)}
+                          .checked=${entityConfig.overrides?.warning !== undefined}
+                        />
+                        <span class="override-label">预警:</span>
                         <input 
                           type="text" 
-                          .value=${entityConfig.warning_threshold || ''}
-                          @input=${(e) => this._updateBalanceEntityWarning(index, e.target.value)}
-                          placeholder="例如: <10 或 <=0"
+                          class="override-input"
+                          @change=${(e) => this._updateEntityOverrideValue(index, 'warning', e.target.value)}
+                          .value=${entityConfig.overrides?.warning || ''}
+                          placeholder='>10, <=5, ==on,=="hello world"'
+                          ?disabled=${entityConfig.overrides?.warning === undefined}
                         />
                       </div>
+
                     </div>
                   </div>
                 `;
@@ -2436,8 +2498,6 @@ class StateGridPhoneEditor extends LitElement {
     }));
   }
 
-
-
   _onButtonSearch(e) {
     const searchTerm = e.target.value.toLowerCase();
     this._buttonSearchTerm = searchTerm;
@@ -2480,20 +2540,7 @@ class StateGridPhoneEditor extends LitElement {
     this.requestUpdate();
   }
 
-  _checkboxChanged(e) {
-    const { name, checked } = e.target;
-    
-    this.config = {
-      ...this.config,
-      [name]: checked ? 'none' : ''
-    };
-    
-    this.dispatchEvent(new CustomEvent('config-changed', {
-      detail: { config: this.config },
-      bubbles: true,
-      composed: true
-    }));
-  }
+
 
   firstUpdated() {
     document.addEventListener('click', (e) => {
@@ -2556,12 +2603,6 @@ class StateGridPhoneEditor extends LitElement {
     // 添加新的余额实体配置
     const newEntity = {
       entity_id: entityId,
-      overrides: {
-        name: '',
-        unit: '',
-        icon: ''
-      },
-      warning_threshold: ''
     };
     
     this.config = {
@@ -2581,6 +2622,67 @@ class StateGridPhoneEditor extends LitElement {
     this.requestUpdate();
   }
 
+  _updateEntityOverride(index, overrideType, enabled) {
+    const currentEntities = this.config.entities || [];
+    const newEntities = [...currentEntities];
+    
+    if (newEntities[index]) {
+      const overrides = { ...newEntities[index].overrides };
+      
+      if (enabled) {
+        overrides[overrideType] = '';
+      } else {
+        delete overrides[overrideType];
+      }
+      
+      newEntities[index] = {
+        ...newEntities[index],
+        overrides: Object.keys(overrides).length > 0 ? overrides : undefined
+      };
+    }
+    
+    this.config = {
+      ...this.config,
+      entities: newEntities
+    };
+    
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config: this.config },
+      bubbles: true,
+      composed: true
+    }));
+    
+    this.requestUpdate();
+  }
+
+  _updateEntityOverrideValue(index, overrideType, value) {
+    const currentEntities = this.config.entities || [];
+    const newEntities = [...currentEntities];
+    
+    if (newEntities[index] && newEntities[index].overrides && newEntities[index].overrides[overrideType] !== undefined) {
+      const overrides = { ...newEntities[index].overrides };
+      overrides[overrideType] = value.trim();
+      
+      newEntities[index] = {
+        ...newEntities[index],
+        overrides: overrides
+      };
+    }
+    
+    this.config = {
+      ...this.config,
+      entities: newEntities
+    };
+    
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config: this.config },
+      bubbles: true,
+      composed: true
+    }));
+    
+    this.requestUpdate();
+  }
+
   _removeBalanceEntity(index) {
     const currentEntities = this.config.entities || [];
     const newEntities = currentEntities.filter((_, i) => i !== index);
@@ -2597,54 +2699,6 @@ class StateGridPhoneEditor extends LitElement {
     }));
     
     this.requestUpdate();
-  }
-
-  _updateBalanceEntityOverride(index, field, value) {
-    const currentEntities = this.config.entities || [];
-    const newEntities = [...currentEntities];
-    
-    if (!newEntities[index].overrides) {
-      newEntities[index].overrides = {};
-    }
-    
-    if (value.trim() === '') {
-      delete newEntities[index].overrides[field];
-    } else {
-      newEntities[index].overrides[field] = value;
-    }
-    
-    this.config = {
-      ...this.config,
-      entities: newEntities
-    };
-    
-    this.dispatchEvent(new CustomEvent('config-changed', {
-      detail: { config: this.config },
-      bubbles: true,
-      composed: true
-    }));
-  }
-
-  _updateBalanceEntityWarning(index, value) {
-    const currentEntities = this.config.entities || [];
-    const newEntities = [...currentEntities];
-    
-    if (value.trim() === '') {
-      delete newEntities[index].warning_threshold;
-    } else {
-      newEntities[index].warning_threshold = value;
-    }
-    
-    this.config = {
-      ...this.config,
-      entities: newEntities
-    };
-    
-    this.dispatchEvent(new CustomEvent('config-changed', {
-      detail: { config: this.config },
-      bubbles: true,
-      composed: true
-    }));
   }
 }
 customElements.define('xiaoshi-state-grid-editor', StateGridPhoneEditor);
@@ -2735,9 +2789,10 @@ class StateGridPhone extends LitElement {
         if (!entity) continue;
         
         let value = entity.state;
-        let unit = entityConfig.unit_of_measurement || entity.attributes.unit_of_measurement || '';
+        let unit = entityConfig.unit || entity.attributes.unit_of_measurement || '';
         let friendlyName = entityConfig.name || entity.attributes.friendly_name || entity.entity_id;
         let icon = entityConfig.icon || entity.attributes.icon || 'mdi:help-circle';
+        let warning = entityConfig.warning || '';
         
         // 应用覆盖配置
         if (entityConfig.overrides) {
@@ -2747,6 +2802,12 @@ class StateGridPhone extends LitElement {
           if (entityConfig.overrides.unit && entityConfig.overrides.unit.trim() !== '') {
             unit = entityConfig.overrides.unit;
           }
+          if (entityConfig.overrides.icon && entityConfig.overrides.icon.trim() !== '') {
+            icon = entityConfig.overrides.icon;
+          }
+          if (entityConfig.overrides.warning && entityConfig.overrides.warning.trim() !== '') {
+            warning = entityConfig.overrides.warning;
+          }
         }
         
         balanceData.push({
@@ -2755,7 +2816,7 @@ class StateGridPhone extends LitElement {
           value: value,
           unit: unit,
           icon: icon,
-          warning_threshold: entityConfig.warning_threshold || ''
+          warning: warning
         });
       }
       
@@ -3079,8 +3140,8 @@ class StateGridPhone extends LitElement {
                       let isWarning = false;
                       
                       // 首先检查明细预警，如果存在且满足条件，直接设为预警状态
-                      if (balanceData.warning_threshold && balanceData.warning_threshold.trim() !== '') {
-                        isWarning = this._evaluateWarningCondition(balanceData.value, balanceData.warning_threshold); 
+                      if (balanceData.warning && balanceData.warning.trim() !== '') {
+                        isWarning = this._evaluateWarningCondition(balanceData.value, balanceData.warning); 
                       } else {
                         // 只有在没有明细预警时才检查全局预警
                         if (this.config.global_warning && this.config.global_warning.trim() !== '') {
@@ -3245,9 +3306,10 @@ class StateGridPad extends LitElement {
         if (!entity) continue;
         
         let value = entity.state;
-        let unit = entityConfig.unit_of_measurement || entity.attributes.unit_of_measurement || '';
+        let unit = entityConfig.unit || entity.attributes.unit_of_measurement || '';
         let friendlyName = entityConfig.name || entity.attributes.friendly_name || entity.entity_id;
         let icon = entityConfig.icon || entity.attributes.icon || 'mdi:help-circle';
+        let warning = entityConfig.warning || '';
         
         // 应用覆盖配置
         if (entityConfig.overrides) {
@@ -3257,6 +3319,12 @@ class StateGridPad extends LitElement {
           if (entityConfig.overrides.unit && entityConfig.overrides.unit.trim() !== '') {
             unit = entityConfig.overrides.unit;
           }
+          if (entityConfig.overrides.icon && entityConfig.overrides.icon.trim() !== '') {
+            icon = entityConfig.overrides.icon;
+          }
+          if (entityConfig.overrides.warning && entityConfig.overrides.warning.trim() !== '') {
+            warning = entityConfig.overrides.warning;
+          }
         }
         
         balanceData.push({
@@ -3265,7 +3333,7 @@ class StateGridPad extends LitElement {
           value: value,
           unit: unit,
           icon: icon,
-          warning_threshold: entityConfig.warning_threshold || ''
+          warning: warning
         });
       }
       
@@ -3617,8 +3685,8 @@ class StateGridPad extends LitElement {
                       let isWarning = false;
                       
                       // 首先检查明细预警，如果存在且满足条件，直接设为预警状态
-                      if (balanceData.warning_threshold && balanceData.warning_threshold.trim() !== '') {
-                        isWarning = this._evaluateWarningCondition(balanceData.value, balanceData.warning_threshold); 
+                      if (balanceData.warning && balanceData.warning.trim() !== '') {
+                        isWarning = this._evaluateWarningCondition(balanceData.value, balanceData.warning); 
                       } else {
                         // 只有在没有明细预警时才检查全局预警
                         if (this.config.global_warning && this.config.global_warning.trim() !== '') {

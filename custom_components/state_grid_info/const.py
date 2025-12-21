@@ -15,17 +15,7 @@ DATA_SOURCE_NAMES = {
     DATA_SOURCE_QINGLONG: "国网青龙脚本",
 }
 
-# 计费类型选项
-BILLING_TYPE_SINGLE = "single"
-BILLING_TYPE_SEGMENTED = "segmented"
-BILLING_TYPE_OPTIONS = [
-    BILLING_TYPE_SINGLE,
-    BILLING_TYPE_SEGMENTED,
-]
-BILLING_TYPE_NAMES = {
-    BILLING_TYPE_SINGLE: "单一计费",
-    BILLING_TYPE_SEGMENTED: "分段计费",
-}
+
 
 # 计费标准选项
 BILLING_STANDARD_YEAR_阶梯_峰平谷 = "year_ladder_fpg"
@@ -45,12 +35,12 @@ BILLING_STANDARD_OPTIONS = [
 ]
 
 BILLING_STANDARD_NAMES = {
-    BILLING_STANDARD_YEAR_阶梯_峰平谷: "年阶梯+峰平谷",
-    BILLING_STANDARD_YEAR_阶梯: "年阶梯",
-    BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格: "月阶梯+峰平谷+变动价格",
-    BILLING_STANDARD_MONTH_阶梯_峰平谷: "月阶梯+峰平谷",
-    BILLING_STANDARD_MONTH_阶梯: "月阶梯",
-    BILLING_STANDARD_OTHER_平均单价: "其他-平均单价",
+    BILLING_STANDARD_YEAR_阶梯_峰平谷: "年阶梯峰平谷计费",
+    BILLING_STANDARD_YEAR_阶梯: "年阶梯计费",
+    BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格: "月阶梯峰平谷变动价格计费",
+    BILLING_STANDARD_MONTH_阶梯_峰平谷: "月阶梯峰平谷计费",
+    BILLING_STANDARD_MONTH_阶梯: "月阶梯计费",
+    BILLING_STANDARD_OTHER_平均单价: "平均单价计费",
 }
 
 # MQTT 相关常量
@@ -62,7 +52,6 @@ CONF_STATE_GRID_ID = "state_grid_id"
 
 # 配置项
 CONF_DATA_SOURCE = "data_source"
-CONF_BILLING_TYPE = "billing_type"
 CONF_BILLING_STANDARD = "billing_standard"
 CONF_SEGMENT_DATE = "segment_date"
 CONF_SEGMENT_BEFORE_STANDARD = "segment_before_standard"

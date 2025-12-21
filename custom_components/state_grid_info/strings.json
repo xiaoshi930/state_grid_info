@@ -33,15 +33,6 @@
           "billing_type": "计费类型"
         }
       },
-      "segmented_billing": {
-        "title": "分段计费配置",
-        "description": "请配置分段计费信息",
-        "data": {
-          "segment_date": "分段时间点（格式：年月，如202501）",
-          "segment_before_standard": "分段前计费标准",
-          "segment_after_standard": "分段后计费标准"
-        }
-      },
       "billing_standard": {
         "title": "选择计费标准",
         "description": "请选择电费计费标准",
@@ -50,8 +41,8 @@
         }
       },
       "billing_standard_config": {
-        "title": "{segment}{standard}配置",
-        "description": "请配置{segment}{standard}的详细参数",
+        "title": "{standard}配置",
+        "description": "请配置{standard}的详细参数",
         "data": {
           "ladder_level_1": "第一阶梯档位",
           "ladder_level_2": "第二阶梯档位",

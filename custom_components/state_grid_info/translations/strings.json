@@ -29,18 +29,9 @@
       },
       "billing_type": {
         "title": "选择计费类型",
-        "description": "请选择电费计费类型（单一计费或分段计费）",
+        "description": "请选择电费计费类型",
         "data": {
           "billing_type": "计费类型"
-        }
-      },
-      "segmented_billing": {
-        "title": "分段计费配置",
-        "description": "请配置分段计费的时间点和计费标准",
-        "data": {
-          "segment_date": "分段时间点（格式：年月，如202501）",
-          "segment_before_standard": "分段前计费标准",
-          "segment_after_standard": "分段后计费标准"
         }
       },
       "billing_standard": {
@@ -51,8 +42,8 @@
         }
       },
       "billing_standard_config": {
-        "title": "{segment}{standard}配置",
-        "description": "请配置{segment}{standard}的详细参数",
+        "title": "{standard}配置",
+        "description": "请配置{standard}的详细参数",
         "data": {
           "ladder_level_1": "第一阶梯档位（度）",
           "ladder_level_2": "第二阶梯档位（度）",
@@ -114,30 +105,6 @@
           "month_12_ladder_1_valley": "12月第一阶梯谷时段电价（元/度）",
           "month_12_ladder_2_valley": "12月第二阶梯谷时段电价（元/度）",
           "month_12_ladder_3_valley": "12月第三阶梯谷时段电价（元/度）"
-        }
-      },
-      "before_segment_config": {
-        "title": "分段前{standard}配置",
-        "description": "请配置分段前{standard}的详细参数",
-        "data": {
-          "ladder_level_1": "第一阶梯档位（度）",
-          "ladder_level_2": "第二阶梯档位（度）",
-          "ladder_price_1": "第一阶梯单价（元/度）",
-          "ladder_price_2": "第二阶梯单价（元/度）",
-          "ladder_price_3": "第三阶梯单价（元/度）",
-          "year_ladder_start": "年阶梯计费周期起始日期（格式：月日，如0101）"
-        }
-      },
-      "after_segment_config": {
-        "title": "分段后{standard}配置",
-        "description": "请配置分段后{standard}的详细参数",
-        "data": {
-          "ladder_level_1": "第一阶梯档位（度）",
-          "ladder_level_2": "第二阶梯档位（度）",
-          "ladder_price_1": "第一阶梯单价（元/度）",
-          "ladder_price_2": "第二阶梯单价（元/度）",
-          "ladder_price_3": "第三阶梯单价（元/度）",
-          "year_ladder_start": "年阶梯计费周期起始日期（格式：月日，如0101）"
         }
       }
     },

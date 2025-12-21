@@ -1408,7 +1408,11 @@ class StateGridInfoSensor(SensorEntity):
             
             # 格式化年阶梯起始日期和结束日期
             year_ladder_start_date_formatted = f"{ladder_year}.{year_ladder_start[:2]}.{year_ladder_start[2:]}"
-            year_ladder_end_date_formatted = f"{ladder_year + 1}.{year_ladder_start[:2]}.{year_ladder_start[2:]}"
+            
+            # 计算结束日期：次年起始日期减1天
+            start_date_next_year = datetime(ladder_year + 1, start_month, start_day)
+            end_date = start_date_next_year - timedelta(days=1)
+            year_ladder_end_date_formatted = f"{end_date.year}.{end_date.month:02d}.{end_date.day:02d}"
             
             billing_standard_attrs["当前年阶梯起始日期"] = year_ladder_start_date_formatted
             billing_standard_attrs["当前年阶梯结束日期"] = year_ladder_end_date_formatted

@@ -13,13 +13,11 @@ from homeassistant.helpers import config_validation as cv
 from .const import (
     DOMAIN, NAME,
     DATA_SOURCE_HASSBOX, DATA_SOURCE_QINGLONG, DATA_SOURCE_OPTIONS, DATA_SOURCE_NAMES,
-    BILLING_TYPE_SINGLE, BILLING_TYPE_SEGMENTED, BILLING_TYPE_OPTIONS, BILLING_TYPE_NAMES,
     BILLING_STANDARD_OPTIONS, BILLING_STANDARD_NAMES,
     BILLING_STANDARD_YEAR_阶梯, BILLING_STANDARD_YEAR_阶梯_峰平谷,
     BILLING_STANDARD_MONTH_阶梯, BILLING_STANDARD_MONTH_阶梯_峰平谷,
     BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格, BILLING_STANDARD_OTHER_平均单价,
-    CONF_DATA_SOURCE, CONF_BILLING_TYPE, CONF_BILLING_STANDARD,
-    CONF_SEGMENT_DATE, CONF_SEGMENT_BEFORE_STANDARD, CONF_SEGMENT_AFTER_STANDARD,
+    CONF_DATA_SOURCE, CONF_BILLING_STANDARD,
     CONF_CONSUMER_NUMBER, CONF_CONSUMER_NUMBER_INDEX,
     CONF_MQTT_HOST, CONF_MQTT_PORT, CONF_MQTT_USERNAME, CONF_MQTT_PASSWORD, CONF_STATE_GRID_ID,
     CONF_LADDER_LEVEL_1, CONF_LADDER_LEVEL_2,
@@ -111,7 +109,7 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 (item["index"] for item in self._consumer_numbers if item["number"] == user_input[CONF_CONSUMER_NUMBER]),
                 0
             )
-            return await self.async_step_billing_type()
+            return await self.async_step_billing_standard()
         
         consumer_options = {item["number"]: item["number"] for item in self._consumer_numbers}
         
@@ -138,7 +136,7 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             
             # 可以在这里添加MQTT连接测试
             
-            return await self.async_step_billing_type()
+            return await self.async_step_billing_standard()
         
         return self.async_show_form(
             step_id="qinglong_mqtt",
@@ -152,37 +150,7 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    #选择计费类型（单一计费、分段计费）
-    async def async_step_billing_type(self, user_input=None):
-        errors = {}
-        
-        if user_input is not None:
-            self._data[CONF_BILLING_TYPE] = user_input[CONF_BILLING_TYPE]
-            
-            if user_input[CONF_BILLING_TYPE] == BILLING_TYPE_SINGLE:
-                # 直接进入单一计费标准选择
-                billing_standard_options = {k: BILLING_STANDARD_NAMES[k] for k in BILLING_STANDARD_OPTIONS}
-                return self.async_show_form(
-                    step_id="billing_standard",
-                    data_schema=vol.Schema({
-                        vol.Required(CONF_BILLING_STANDARD): vol.In(billing_standard_options),
-                    }),
-                    errors=errors,
-                )
-            else:
-                return await self.async_step_segmented_billing()
-        
-        billing_type_options = {k: BILLING_TYPE_NAMES[k] for k in BILLING_TYPE_OPTIONS}
-        
-        return self.async_show_form(
-            step_id="billing_type",
-            data_schema=vol.Schema({
-                vol.Required(CONF_BILLING_TYPE, default=BILLING_TYPE_SINGLE): vol.In(billing_type_options),
-            }),
-            errors=errors,
-        )
-
-    # 单一计费：计费标准
+    # 计费标准
     async def async_step_billing_standard(self, user_input=None):
         errors = {}
         
@@ -200,7 +168,6 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors=errors,
                 description_placeholders={
                     "standard": BILLING_STANDARD_NAMES.get(current_standard, ""),
-                    "segment": "",
                 },
             )
 
@@ -237,144 +204,13 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={
                 "standard": BILLING_STANDARD_NAMES.get(current_standard, ""),
-                "segment": "",
             },
         )
 
-    # 分段计费：计费标准（分段计费标准）
-    async def async_step_segmented_billing(self, user_input=None):
-        errors = {}
-        
-        if user_input is not None:
-            self._data[CONF_SEGMENT_DATE] = user_input[CONF_SEGMENT_DATE]
-            self._data[CONF_SEGMENT_BEFORE_STANDARD] = user_input[CONF_SEGMENT_BEFORE_STANDARD]
-            self._data[CONF_SEGMENT_AFTER_STANDARD] = user_input[CONF_SEGMENT_AFTER_STANDARD]
-            
-            # 设置当前计费标准为分段前标准
-            self._data[CONF_BILLING_STANDARD] = user_input[CONF_SEGMENT_BEFORE_STANDARD]
-            # 明确标记这是前段配置，后续会自动跳转到后段
-            self._data['_pending_after_standard'] = user_input[CONF_SEGMENT_AFTER_STANDARD]
-            
-            # 添加调试日志
-            _LOGGER.debug("Starting segmented billing config: before_standard=%s, after_standard=%s", 
-                         user_input[CONF_SEGMENT_BEFORE_STANDARD], user_input[CONF_SEGMENT_AFTER_STANDARD])
-            
-            # 获取分段前计费标准的配置表单
-            current_standard = self._data.get(CONF_SEGMENT_BEFORE_STANDARD)
-            schema = self._get_billing_schema(current_standard, is_before_segment=True)
-            
-            # 直接显示分段前配置表单
-            return self.async_show_form(
-                step_id="before_segment_config",
-                data_schema=vol.Schema(schema),
-                errors=errors,
-                description_placeholders={
-                    "standard": BILLING_STANDARD_NAMES.get(current_standard, ""),
-                    "segment": "分段前",
-                },
-            )
-        
-        billing_standard_options = {k: BILLING_STANDARD_NAMES[k] for k in BILLING_STANDARD_OPTIONS}
-        
-        return self.async_show_form(
-            step_id="segmented_billing",
-            data_schema=vol.Schema({
-                vol.Required(CONF_SEGMENT_DATE): cv.string,
-                vol.Required(CONF_SEGMENT_BEFORE_STANDARD): vol.In(billing_standard_options),
-                vol.Required(CONF_SEGMENT_AFTER_STANDARD): vol.In(billing_standard_options),
-            }),
-            errors=errors,
-        )
 
-    # 分段计费：分段前（表单配置）
-    async def async_step_before_segment_config(self, user_input=None):
-        """
-        处理分段前计费标准配置步骤
-        
-        Args:
-            user_input (dict, optional): 用户输入的配置数据，默认为None
-            
-        Returns:
-            dict: 保存配置后跳转到分段后配置步骤
-        """
-        errors = {}
-        current_standard = self._data.get(CONF_SEGMENT_BEFORE_STANDARD)
-        _LOGGER.debug("Configuring BEFORE segment standard: %s", current_standard)
-        
-        if user_input is not None:
-            # 保存配置，使用 before_ 前缀
-            for key, value in user_input.items():
-                self._data[f"before_{key}"] = value
-            
-            # 设置后段计费标准
-            if self._data.get('_pending_after_standard'):
-                self._data[CONF_BILLING_STANDARD] = self._data['_pending_after_standard']
-                _LOGGER.debug("Switching to AFTER segment standard: %s", self._data[CONF_BILLING_STANDARD])
-                del self._data['_pending_after_standard']
-                
-                # 获取分段后计费标准的配置表单
-                after_standard = self._data.get(CONF_SEGMENT_AFTER_STANDARD)
-                schema = self._get_billing_schema(after_standard, is_before_segment=False)
-                
-                # 直接显示分段后配置表单
-                return self.async_show_form(
-                    step_id="after_segment_config",
-                    data_schema=vol.Schema(schema),
-                    errors=errors,
-                    description_placeholders={
-                        "standard": BILLING_STANDARD_NAMES.get(after_standard, ""),
-                        "segment": "分段后",
-                    },
-                )
-            
-            # 如果没有后段配置，直接创建条目
-            title = f"{NAME} - {self._data.get(CONF_CONSUMER_NUMBER)}"
-            return self.async_create_entry(title=title, data=self._data)
-        
-        # 获取表单配置
-        schema = self._get_billing_schema(current_standard, is_before_segment=True)
-        
-        return self.async_show_form(
-            step_id="before_segment_config",
-            data_schema=vol.Schema(schema),
-            errors=errors,
-            description_placeholders={
-                "standard": BILLING_STANDARD_NAMES.get(current_standard, ""),
-                "segment": "分段前",
-            },
-        )
-
-    # 分段计费：分段后（表单配置）
-    async def async_step_after_segment_config(self, user_input=None):
-        """Handle the after-segment billing standard configuration step."""
-        errors = {}
-        current_standard = self._data.get(CONF_SEGMENT_AFTER_STANDARD)
-        _LOGGER.debug("Configuring AFTER segment standard: %s", current_standard)
-
-        if user_input is not None:
-            # 保存配置，使用 after_ 前缀
-            for key, value in user_input.items():
-                self._data[f"after_{key}"] = value
-            
-            # 配置完成，创建条目
-            title = f"{NAME} - {self._data.get(CONF_CONSUMER_NUMBER)}"
-            return self.async_create_entry(title=title, data=self._data)
-        
-        # 根据不同的计费标准，显示不同的配置表单
-        schema = self._get_billing_schema(current_standard, is_before_segment=False)
-        
-        return self.async_show_form(
-            step_id="after_segment_config",
-            data_schema=vol.Schema(schema),
-            errors=errors,
-            description_placeholders={
-                "standard": BILLING_STANDARD_NAMES.get(current_standard, ""),
-                "segment": "分段后"
-            },
-        )
 
     #获取表单配置
-    def _get_billing_schema(self, current_standard, is_before_segment=False):
+    def _get_billing_schema(self, current_standard):
         schema = {}
         
         # 年阶梯

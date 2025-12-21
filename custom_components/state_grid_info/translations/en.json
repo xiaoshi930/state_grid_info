@@ -50,8 +50,8 @@
         }
       },
       "billing_standard_config": {
-        "title": "{segment}{standard} Configuration",
-        "description": "Please configure detailed parameters for {segment}{standard}",
+        "title": "{standard} Configuration",
+        "description": "Please configure detailed parameters for {standard}",
         "data": {
           "ladder_level_1": "First Ladder Level (kWh)",
           "ladder_level_2": "Second Ladder Level (kWh)",
@@ -113,30 +113,6 @@
           "month_12_ladder_1_valley": "December First Ladder Valley Price (CNY/kWh)",
           "month_12_ladder_2_valley": "December Second Ladder Valley Price (CNY/kWh)",
           "month_12_ladder_3_valley": "December Third Ladder Valley Price (CNY/kWh)"
-        }
-      },
-      "before_segment_config": {
-        "title": "Before Segment {standard} Configuration",
-        "description": "Please configure detailed parameters for {standard} before segment",
-        "data": {
-          "ladder_level_1": "First Ladder Level (kWh)",
-          "ladder_level_2": "Second Ladder Level (kWh)",
-          "ladder_price_1": "First Ladder Price (CNY/kWh)",
-          "ladder_price_2": "Second Ladder Price (CNY/kWh)",
-          "ladder_price_3": "Third Ladder Price (CNY/kWh)",
-          "year_ladder_start": "Year Ladder Start Date (Format: MMDD, e.g., 0101)"
-        }
-      },
-      "after_segment_config": {
-        "title": "After Segment {standard} Configuration",
-        "description": "Please configure detailed parameters for {standard} after segment",
-        "data": {
-          "ladder_level_1": "First Ladder Level (kWh)",
-          "ladder_level_2": "Second Ladder Level (kWh)",
-          "ladder_price_1": "First Ladder Price (CNY/kWh)",
-          "ladder_price_2": "Second Ladder Price (CNY/kWh)",
-          "ladder_price_3": "Third Ladder Price (CNY/kWh)",
-          "year_ladder_start": "Year Ladder Start Date (Format: MMDD, e.g., 0101)"
         }
       }
     },

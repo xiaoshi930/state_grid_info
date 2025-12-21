@@ -1,4 +1,4 @@
-console.info("%c 国网信息卡 \n%c   v 2.7   ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
+console.info("%c 国网信息卡 \n%c   v 2.8   ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 import tinycolor from "./tinycolor.js";
 
@@ -125,6 +125,28 @@ class StateGridPhoneEditor extends LitElement {
         font-weight: bold;
         margin-bottom: 8px;
         color: var(--primary-text-color);
+      }
+
+      .layout-select {
+        width: 100%;
+        padding: 6px 12px;
+        border: 1px solid var(--primary-color);
+        border-radius: 4px;
+        background: var(--card-background-color);
+        color: var(--primary-text-color);
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+
+      .entities-per-row-input {
+        width: 100%;
+        padding: 6px 12px;
+        border: 1px solid var(--primary-color);
+        border-radius: 4px;
+        background: var(--card-background-color);
+        color: var(--primary-text-color);
+        font-size: 14px;
+        box-sizing: border-box;
       }
 
       .selected-balance-entity {
@@ -346,6 +368,34 @@ class StateGridPhoneEditor extends LitElement {
               placeholder="例如: <10 或 <=0 或 ==off"
               class="balance-name-input"
             />
+          </div>
+
+          <div class="form-group">
+            <label>多户号排列方式：</label>
+            <select 
+              @change=${this._valueChanged}
+              .value=${this.config.entity_layout !== undefined ? this.config.entity_layout : 'vertical'}
+              name="entity_layout"
+              class="layout-select"
+            >
+              <option value="vertical">纵向排列</option>
+              <option value="horizontal">横向排列</option>
+            </select>
+          </div>
+
+          <div class="form-group" ?hidden=${this.config.entity_layout !== 'horizontal'}>
+            <label>每排个数：</label>
+            <input 
+              type="number" 
+              min="1"
+              max="10"
+              @change=${this._valueChanged}
+              .value=${this.config.entities_per_row !== undefined ? this.config.entities_per_row : '3'}
+              name="entities_per_row"
+              placeholder="3"
+              class="entities-per-row-input"
+            />
+            <div class="help-text">横向排列时每行显示的实体个数（1-10）</div>
           </div>
 
           <div class="form-group">
@@ -1667,13 +1717,37 @@ class StateGridInfo extends LitElement {
         overflow-y: auto;
         min-height: 0;
         padding: 0 0 8px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      /* 横向布局样式 */
+      .balance-devices-list.horizontal {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px;
+      }
+
+      .balance-devices-list.horizontal .balance-device-item {
+        flex: 0 0 calc((100% - var(--gap-count, 2) * 12px) / var(--items-per-row, 3));
+        border: 1px solid rgb(150,150,150,0.5);
+        border-radius: 8px;
+        margin: 0;
+        padding: 12px 0;
+      }
+
+      .balance-devices-list.horizontal .balance-device-item:first-child {
+        border: 1px solid rgb(150,150,150,0.5);
       }
 
       .balance-device-item {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin: 0px 16px;
+        margin: 0px 8px;
         padding: 8px 0;
         border-bottom: 1px solid rgb(150,150,150,0.5);
         cursor: pointer;
@@ -1700,7 +1774,7 @@ class StateGridInfo extends LitElement {
       }
 
       .balance-device-icon {
-        margin-right: 12px;
+        margin-right: 8px;
         color: var(--fg-color, #000);
         flex-shrink: 0;
       }
@@ -1729,6 +1803,7 @@ class StateGridInfo extends LitElement {
         font-size: 12px;
         color: var(--fg-color, #000);
         margin-left: 4px;
+        margin-right: 4px;
         font-weight: bold;
       }
 
@@ -2996,11 +3071,19 @@ class StateGridInfo extends LitElement {
       totalAmountWarning = this._evaluateWarningCondition(totalAmount, this.config.global_warning);
     }
     
+    // 计算布局相关的CSS变量
+    const isHorizontalLayout = this.config.entity_layout === 'horizontal';
+    const entitiesPerRow = parseInt(this.config.entities_per_row) || 3;
+    const layoutStyle = isHorizontalLayout ? `
+      --items-per-row: ${entitiesPerRow};
+      --gap-count: ${Math.max(0, entitiesPerRow - 1)};
+    ` : '';
+
     return html`
      ${this._balanceData.length > 1 ? html`
       <div class="card-container" style="width: ${this.config.width};">
         <!-- 国网信息卡片 -->
-        <div class="balance-card" style="--fg-color: ${fgColor}; --bg-color: ${bgColor};">
+        <div class="balance-card" style="--fg-color: ${fgColor}; --bg-color: ${bgColor}; ${layoutStyle}">
           <div class="balance-header">
             <div class="balance-title">
               <span class="balance-indicator" style="background: rgb(0,222,220); animation: pulse 2s infinite"></span>
@@ -3012,7 +3095,7 @@ class StateGridInfo extends LitElement {
           </div>
           
          
-            <div class="balance-devices-list">
+            <div class="balance-devices-list ${isHorizontalLayout ? 'horizontal' : ''}">
               ${this._balanceLoading ? 
                 html`<div class="balance-loading">加载中...</div>` :
                 

@@ -1,4 +1,4 @@
-console.info("%c 国网信息卡 \n%c   v 2.6   ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
+console.info("%c 国网信息卡 \n%c   v 2.7   ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 import tinycolor from "./tinycolor.js";
 
@@ -271,6 +271,18 @@ class StateGridPhoneEditor extends LitElement {
         </div>
 
         <div class="form-group">
+          <label>图表宽度：
+            <input 
+              type="text" 
+              @change=${this._valueChanged}
+              .value=${this.config.charwidth !== undefined ? this.config.charwidth : '380px'}
+              name="charwidth"
+              placeholder="只能是px单位，例如: 380px"
+            />
+          </label>
+        </div>
+
+        <div class="form-group">
             <label class="color-input-wrapper">用电量数据颜色：
               <input 
                 type="color" 
@@ -511,10 +523,6 @@ class StateGridPhoneEditor extends LitElement {
     }));
   }
 
-
-
-
-
   async firstUpdated() {
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.balance-entity-section')) {
@@ -684,6 +692,7 @@ class StateGridInfo extends LitElement {
     return {
       hass: { type: Object },
       width: { type: String, attribute: true },
+      charwidth: { type: String, attribute: true },
       height: { type: String, attribute: true },
       year: { type: Number },
       month: { type: Number },
@@ -707,6 +716,7 @@ class StateGridInfo extends LitElement {
     this.config = config;
     if (config) {
       if (config.width !== undefined) this.width = config.width;
+      if (config.charwidth !== undefined) this.charwidth = config.charwidth;
       if (config.year !== undefined) this.year = config.year;
       if (config.month !== undefined) this.month = config.month;
       if (config.color_num !== undefined) this.colorNum = config.color_num;
@@ -720,7 +730,8 @@ class StateGridInfo extends LitElement {
     const today = new Date();
     this.year = today.getFullYear();
     this.month = today.getMonth() + 1;
-    this.width = '';
+    this.width = '380px';
+    this.charwidth = '380px';
     this.theme = 'on';
     this.dayData = [];
     this.activeNav = '';
@@ -1428,8 +1439,9 @@ class StateGridInfo extends LitElement {
       
       .usage-labels {
         position: relative;
-        height: 12px;
+        height: 8px;
         font-size: 8px;
+        line-height: 8px;
         background: transparent;
       }
       
@@ -1925,7 +1937,7 @@ class StateGridInfo extends LitElement {
 
   _getChartDayConfig(data) {
     const theme = this._evaluateTheme();
-    const width = this.config.width ? `${parseFloat(this.config.width) * 0.97}${this.config.width.replace(/[0-9.]/g, '')}` : '95vw';
+    const CardWidth = this.config.charwidth ? parseFloat(this.config.charwidth)*0.97 : 380;
     const Color = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
     const BgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
     const maxElectricity = Math.max(...data.electricity.map(item => item.y));
@@ -1962,7 +1974,7 @@ class StateGridInfo extends LitElement {
       chart: {
         type: 'line',
         height: 210,
-        width: width,
+        width: CardWidth,
         foreColor: Color,
         toolbar: { show: false },
         animations: {
@@ -2006,7 +2018,10 @@ class StateGridInfo extends LitElement {
       },
       yaxis: {
         min: 0,
+        floating: false,
         labels: {
+          minWidth: 5,
+          maxWidth: 25,
           formatter: function(val, index) {
             return val.toFixed(0);
           }
@@ -2156,7 +2171,7 @@ class StateGridInfo extends LitElement {
 
   _getChartMonthConfig(data) {
     const theme = this._evaluateTheme();
-    const width = this.config.width ? `${parseFloat(this.config.width) * 0.97}${this.config.width.replace(/[0-9.]/g, '')}` : '95vw';
+    const CardWidth = this.config.charwidth ? parseFloat(this.config.charwidth)*0.97 : 380;
     const Color = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
     const BgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
     const maxElectricity = Math.max(...data.electricity.map(item => item.y));
@@ -2207,7 +2222,7 @@ class StateGridInfo extends LitElement {
       chart: {
         type: 'line',
         height: 210,
-        width: width,
+        width: CardWidth,
         foreColor: Color,
         toolbar: { show: false },
         animations: {
@@ -2250,7 +2265,10 @@ class StateGridInfo extends LitElement {
       },
       yaxis: {
         min: 0,
+        floating: false,
         labels: {
+          minWidth: 10,
+          maxWidth: 30,
           formatter: function(val, index) {
             return val.toFixed(0);
           }
@@ -2388,7 +2406,7 @@ class StateGridInfo extends LitElement {
           return seriesName;
         },
         markers: {
-          width: 9,
+          width: 10,
           height: 10,
           radius: 5
         },
@@ -2712,7 +2730,7 @@ class StateGridInfo extends LitElement {
     if (billingStandard === '平均单价') {
 
 
-      return html`<div class="price-item-block">单价：${prices.single}元/度</div>`;
+      return html`<div class="price-item-block">单价：${prices.single}</div>`;
     }
     
     let blockPrices = {};
@@ -2752,11 +2770,11 @@ class StateGridInfo extends LitElement {
     }
     
     return html`
-      ${blockPrices.single ? html`<div class="price-item-block">单价：${blockPrices.single}元/度</div>` : ''}
-      ${blockPrices.tip ? html`<div class="price-item-block">尖单价：${blockPrices.tip}元/度</div>` : ''}
-      ${blockPrices.peak ? html`<div class="price-item-block">峰单价：${blockPrices.peak}元/度</div>` : ''}
-      ${blockPrices.normal ? html`<div class="price-item-block">平单价：${blockPrices.normal}元/度</div>` : ''}
-      ${blockPrices.valley ? html`<div class="price-item-block">谷单价：${blockPrices.valley}元/度</div>` : ''}
+      ${blockPrices.single ? html`<div class="price-item-block">单价：${blockPrices.single}</div>` : ''}
+      ${blockPrices.tip ? html`<div class="price-item-block">尖单价：${blockPrices.tip}</div>` : ''}
+      ${blockPrices.peak ? html`<div class="price-item-block">峰单价：${blockPrices.peak}</div>` : ''}
+      ${blockPrices.normal ? html`<div class="price-item-block">平单价：${blockPrices.normal}</div>` : ''}
+      ${blockPrices.valley ? html`<div class="price-item-block">谷单价：${blockPrices.valley}</div>` : ''}
     `;
   }
 

@@ -24,7 +24,7 @@ from .const import (
     CONF_LADDER_PRICE_1, CONF_LADDER_PRICE_2, CONF_LADDER_PRICE_3,
     CONF_YEAR_LADDER_START,
     CONF_PRICE_PEAK, CONF_PRICE_FLAT, CONF_PRICE_VALLEY, CONF_PRICE_TIP,
-    CONF_MONTH_PRICES, CONF_AVERAGE_PRICE,
+    CONF_MONTH_PRICES, CONF_AVERAGE_PRICE, CONF_IS_PREPAID,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -216,6 +216,7 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # 年阶梯
         if current_standard == BILLING_STANDARD_YEAR_阶梯:
             schema = {
+                vol.Optional(CONF_IS_PREPAID, default=False): cv.boolean,  # 是否预付费
                 vol.Required(CONF_YEAR_LADDER_START, default="0101"): cv.string,  # 格式：月日 (MMDD)
                 vol.Required(CONF_LADDER_LEVEL_1, default=2160): cv.positive_float,
                 vol.Required(CONF_LADDER_LEVEL_2, default=4200): cv.positive_float,
@@ -226,6 +227,7 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # 年阶梯峰平谷
         elif current_standard == BILLING_STANDARD_YEAR_阶梯_峰平谷:
             schema = {
+                vol.Optional(CONF_IS_PREPAID, default=False): cv.boolean,  # 是否预付费
                 vol.Required(CONF_YEAR_LADDER_START, default="0101"): cv.string,  # 格式：月日 (MMDD)
                 vol.Required(CONF_LADDER_LEVEL_1, default=2160): cv.positive_float,
                 vol.Required(CONF_LADDER_LEVEL_2, default=4200): cv.positive_float,
@@ -248,6 +250,7 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # 月阶梯
         elif current_standard == BILLING_STANDARD_MONTH_阶梯:
             schema = {
+                vol.Optional(CONF_IS_PREPAID, default=False): cv.boolean,  # 是否预付费
                 vol.Required(CONF_LADDER_LEVEL_1, default=180): cv.positive_float,
                 vol.Required(CONF_LADDER_LEVEL_2, default=280): cv.positive_float,
                 vol.Required(CONF_LADDER_PRICE_1, default=0.5224): cv.positive_float,
@@ -257,6 +260,7 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # 月阶梯峰平谷
         elif current_standard == BILLING_STANDARD_MONTH_阶梯_峰平谷:
             schema = {
+                vol.Optional(CONF_IS_PREPAID, default=False): cv.boolean,  # 是否预付费
                 vol.Required(CONF_LADDER_LEVEL_1, default=180): cv.positive_float,
                 vol.Required(CONF_LADDER_LEVEL_2, default=280): cv.positive_float,
                 # 第一阶梯价格
@@ -280,6 +284,7 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # 为12个月的3个阶梯的谷电价创建36个输入字段
             # 以及全年的3阶梯尖、峰、平单价
             schema = {
+                vol.Optional(CONF_IS_PREPAID, default=False): cv.boolean,  # 是否预付费
                 vol.Required(CONF_LADDER_LEVEL_1, default=180): cv.positive_float,
                 vol.Required(CONF_LADDER_LEVEL_2, default=280): cv.positive_float,
                 # 第一阶梯价格
@@ -357,6 +362,7 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
         elif current_standard == BILLING_STANDARD_OTHER_平均单价:
             schema = {
+                vol.Optional(CONF_IS_PREPAID, default=False): cv.boolean,  # 是否预付费
                 vol.Required(CONF_AVERAGE_PRICE, default=0.6): cv.positive_float,
             }
             

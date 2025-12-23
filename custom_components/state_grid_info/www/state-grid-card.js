@@ -344,6 +344,18 @@ class StateGridPhoneEditor extends LitElement {
             </label>
         </div>
 
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input 
+              type="checkbox" 
+              @change=${this._checkboxChanged}
+              .checked=${this.config.default_show_calendar !== undefined ? this.config.default_show_calendar : false}
+              name="default_show_calendar"
+            />
+            是否默认弹出日历
+          </label>
+        </div>
+
         <!-- 余额实体配置 -->
         <div class="balance-entity-section">
           <div class="form-group">
@@ -771,6 +783,9 @@ class StateGridInfo extends LitElement {
       if (config.month !== undefined) this.month = config.month;
       if (config.color_num !== undefined) this.colorNum = config.color_num;
       if (config.color_cost !== undefined) this.colorCost = config.color_cost;
+      if (config.default_show_calendar !== undefined && config.default_show_calendar) {
+        this.showPanel = 'calendar';
+      }
       this.requestUpdate();
     }
   }
@@ -3039,14 +3054,14 @@ class StateGridInfo extends LitElement {
           <div class="value" style="color: ${this.colorNum}">${data ? data.current.ele.toFixed(2) : '0.00'}
                <span class="unit"  style="color: ${textColor}">度</span>
           </div>
-          <div class="title" style="color: ${textColor}">日用电量</div>
+          <div class="title" style="color: ${textColor}">月用电量</div>
         </div>
 
         <div class="label label2">
           <div class="value" style="color: ${this.colorCost}">${data ? data.current.cost.toFixed(2) : '0.00'}
                <span class="unit" style="color: ${textColor}">元</span>
           </div>
-          <div class="title" style="color: ${textColor}">日用电金额</div>
+          <div class="title" style="color: ${textColor}">月用电金额</div>
         </div>
 
         <div id="chart-container"></div>
@@ -3291,6 +3306,7 @@ class StateGridInfo extends LitElement {
     
     const selectedEntity = this.hass.states[selectedEntityId];
     
+    const isprepaid = selectedEntity.attributes?.预付费 || "否";
     const billingStandard = selectedEntity.attributes?.计费标准?.计费标准;
     const currentLevel = (!billingStandard || billingStandard === '平均单价') ? null : 
       (billingStandard?.includes('年阶梯') || false ? 
@@ -3522,16 +3538,23 @@ class StateGridInfo extends LitElement {
                       </div>
                     `;
                   })()}
-                  <div class="balance-label">电费余额</div>
+
+                  ${isprepaid !== '是' ? html`
+                    <div class="balance-label">电费余额</div>
+                  ` : html`
+                    <div class="balance-label">上月电费</div>
+                  `}
                 </div>
                 
-                <div class="days-info" style="background: ${BgColor2}">
+                 ${isprepaid !== '是' ? html`
+                 <div class="days-info" style="background: ${BgColor2}">
                   <div class="days-amount">
                     ${selectedEntity.attributes?.剩余天数 || '0'}
                     <span class="currency">天</span>
                   </div>
                   <div class="days-label">预估使用天数</div>
                 </div>
+                ` : html``}
                 
                 <div class="action-buttons">
                   <div class="action-button ${this.showPanel === 'calendar' ? 'active' : ''}" @click="${() => this.showCalendar()}" style="background: ${BgColor2}; color: ${Color}">日历</div>

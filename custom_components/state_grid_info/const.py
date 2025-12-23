@@ -78,3 +78,6 @@ CONF_MONTH_PRICES = "month_prices"
 
 # 平均单价
 CONF_AVERAGE_PRICE = "average_price"
+
+# 预付费配置
+CONF_IS_PREPAID = "is_prepaid"

@@ -26,7 +26,7 @@ from .const import (
     CONF_LADDER_PRICE_1, CONF_LADDER_PRICE_2, CONF_LADDER_PRICE_3,
     CONF_YEAR_LADDER_START,
     CONF_PRICE_PEAK, CONF_PRICE_FLAT, CONF_PRICE_VALLEY, CONF_PRICE_TIP,
-    CONF_MONTH_PRICES, CONF_AVERAGE_PRICE,
+    CONF_MONTH_PRICES, CONF_AVERAGE_PRICE, CONF_IS_PREPAID,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -1350,6 +1350,7 @@ class StateGridInfoSensor(SensorEntity):
                             # 将日均消费和剩余天数放在最前面
                             attrs["日均消费"] = round(avg_daily_cost, 2)
                             attrs["剩余天数"] = math.ceil(remaining_days)
+                            attrs["预付费"] = "是" if self.config.get(CONF_IS_PREPAID, False) else "否"
                             
                         except (ValueError, IndexError) as e:
                             _LOGGER.error("计算剩余天数时出错: %s", e)

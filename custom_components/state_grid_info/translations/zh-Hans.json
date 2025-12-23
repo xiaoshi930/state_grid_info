@@ -96,7 +96,8 @@
           "month_11_ladder_3_valley": "11月第三阶梯谷时段电价（元/度）",
           "month_12_ladder_1_valley": "12月第一阶梯谷时段电价（元/度）",
           "month_12_ladder_2_valley": "12月第二阶梯谷时段电价（元/度）",
-          "month_12_ladder_3_valley": "12月第三阶梯谷时段电价（元/度）"
+          "month_12_ladder_3_valley": "12月第三阶梯谷时段电价（元/度）",
+          "is_prepaid": "是否预付费"
         }
       }
     },

@@ -112,7 +112,8 @@
           "month_11_ladder_3_valley": "November Third Ladder Valley Price (CNY/kWh)",
           "month_12_ladder_1_valley": "December First Ladder Valley Price (CNY/kWh)",
           "month_12_ladder_2_valley": "December Second Ladder Valley Price (CNY/kWh)",
-          "month_12_ladder_3_valley": "December Third Ladder Valley Price (CNY/kWh)"
+          "month_12_ladder_3_valley": "December Third Ladder Valley Price (CNY/kWh)",
+          "is_prepaid": "Is Prepaid"
         }
       }
     },

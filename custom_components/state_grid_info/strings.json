@@ -1,6 +1,10 @@
 {
   "config": {
     "step": {
+      "init": {
+        "title": "配置国家电网信息",
+        "description": "请选择国家电网数据的来源"
+      },
       "data_source": {
         "title": "选择数据来源",
         "description": "请选择国家电网数据的来源",
@@ -50,6 +54,7 @@
           "ladder_price_2": "第二阶梯单价",
           "ladder_price_3": "第三阶梯单价",
           "year_ladder_start": "年阶梯开始时间（格式：月日，如0101）",
+          "is_prepaid": "是否预付费",
           "ladder_price_1_price_tip": "第一阶梯尖电价",
           "ladder_price_1_price_peak": "第一阶梯峰电价",
           "ladder_price_1_price_flat": "第一阶梯平电价",
@@ -82,13 +87,117 @@
   },
   "options": {
     "step": {
-      "billing_type": {
-        "title": "修改计费类型",
-        "description": "请选择电费计费类型",
+      "init": {
+        "title": "修改国家电网信息配置",
+        "description": "请修改国家电网信息的配置"
+      },
+      "data_source": {
+        "title": "修改数据来源",
+        "description": "请选择国家电网数据的来源",
         "data": {
-          "billing_type": "计费类型"
+          "data_source": "数据来源"
+        }
+      },
+      "hassbox_consumer": {
+        "title": "修改户号",
+        "description": "请选择要使用的国家电网户号",
+        "data": {
+          "consumer_number": "户号"
+        }
+      },
+      "qinglong_mqtt": {
+        "title": "修改MQTT配置",
+        "description": "请输入MQTT服务器信息和国网ID",
+        "data": {
+          "mqtt_host": "MQTT服务器",
+          "mqtt_port": "MQTT端口",
+          "mqtt_username": "MQTT用户名",
+          "mqtt_password": "MQTT密码",
+          "state_grid_id": "国家电网户号"
+        }
+      },
+      "billing_standard": {
+        "title": "修改计费标准",
+        "description": "请选择电费计费标准",
+        "data": {
+          "billing_standard": "计费标准"
+        }
+      },
+      "billing_standard_config": {
+        "title": "{standard}配置",
+        "description": "请配置{standard}的详细参数",
+        "data": {
+          "ladder_level_1": "第一阶梯档位",
+          "ladder_level_2": "第二阶梯档位",
+          "ladder_price_1": "第一阶梯单价",
+          "ladder_price_2": "第二阶梯单价",
+          "ladder_price_3": "第三阶梯单价",
+          "year_ladder_start": "年阶梯开始时间（格式：月日，如0101）",
+          "is_prepaid": "是否预付费",
+          "ladder_price_1_price_tip": "第一阶梯尖电价",
+          "ladder_price_1_price_peak": "第一阶梯峰电价",
+          "ladder_price_1_price_flat": "第一阶梯平电价",
+          "ladder_price_1_price_valley": "第一阶梯谷电价",
+          "ladder_price_2_price_tip": "第二阶梯尖电价",
+          "ladder_price_2_price_peak": "第二阶梯峰电价",
+          "ladder_price_2_price_flat": "第二阶梯平电价",
+          "ladder_price_2_price_valley": "第二阶梯谷电价",
+          "ladder_price_3_price_tip": "第三阶梯尖电价",
+          "ladder_price_3_price_peak": "第三阶梯峰电价",
+          "ladder_price_3_price_flat": "第三阶梯平电价",
+          "ladder_price_3_price_valley": "第三阶梯谷电价",
+          "price_tip": "尖电价",
+          "price_peak": "峰电价",
+          "price_flat": "平电价",
+          "price_valley": "谷电价",
+          "month_prices": "月份价格（逗号分隔的36个价格）",
+          "average_price": "平均单价",
+          "month_01_ladder_1_valley": "1月第一阶梯谷电价",
+          "month_01_ladder_2_valley": "1月第二阶梯谷电价",
+          "month_01_ladder_3_valley": "1月第三阶梯谷电价",
+          "month_02_ladder_1_valley": "2月第一阶梯谷电价",
+          "month_02_ladder_2_valley": "2月第二阶梯谷电价",
+          "month_02_ladder_3_valley": "2月第三阶梯谷电价",
+          "month_03_ladder_1_valley": "3月第一阶梯谷电价",
+          "month_03_ladder_2_valley": "3月第二阶梯谷电价",
+          "month_03_ladder_3_valley": "3月第三阶梯谷电价",
+          "month_04_ladder_1_valley": "4月第一阶梯谷电价",
+          "month_04_ladder_2_valley": "4月第二阶梯谷电价",
+          "month_04_ladder_3_valley": "4月第三阶梯谷电价",
+          "month_05_ladder_1_valley": "5月第一阶梯谷电价",
+          "month_05_ladder_2_valley": "5月第二阶梯谷电价",
+          "month_05_ladder_3_valley": "5月第三阶梯谷电价",
+          "month_06_ladder_1_valley": "6月第一阶梯谷电价",
+          "month_06_ladder_2_valley": "6月第二阶梯谷电价",
+          "month_06_ladder_3_valley": "6月第三阶梯谷电价",
+          "month_07_ladder_1_valley": "7月第一阶梯谷电价",
+          "month_07_ladder_2_valley": "7月第二阶梯谷电价",
+          "month_07_ladder_3_valley": "7月第三阶梯谷电价",
+          "month_08_ladder_1_valley": "8月第一阶梯谷电价",
+          "month_08_ladder_2_valley": "8月第二阶梯谷电价",
+          "month_08_ladder_3_valley": "8月第三阶梯谷电价",
+          "month_09_ladder_1_valley": "9月第一阶梯谷电价",
+          "month_09_ladder_2_valley": "9月第二阶梯谷电价",
+          "month_09_ladder_3_valley": "9月第三阶梯谷电价",
+          "month_10_ladder_1_valley": "10月第一阶梯谷电价",
+          "month_10_ladder_2_valley": "10月第二阶梯谷电价",
+          "month_10_ladder_3_valley": "10月第三阶梯谷电价",
+          "month_11_ladder_1_valley": "11月第一阶梯谷电价",
+          "month_11_ladder_2_valley": "11月第二阶梯谷电价",
+          "month_11_ladder_3_valley": "11月第三阶梯谷电价",
+          "month_12_ladder_1_valley": "12月第一阶梯谷电价",
+          "month_12_ladder_2_valley": "12月第二阶梯谷电价",
+          "month_12_ladder_3_valley": "12月第三阶梯谷电价"
         }
       }
+    },
+    "error": {
+      "hassbox_config_not_found": "未找到HassBox配置文件",
+      "hassbox_config_error": "读取HassBox配置文件出错",
+      "mqtt_connection_error": "MQTT连接失败"
+    },
+    "progress": {
+      "import": "正在导入..."
     }
   }
 }

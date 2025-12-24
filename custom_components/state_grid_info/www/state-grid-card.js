@@ -1,4 +1,4 @@
-console.info("%c 国网信息卡 \n%c   v 2.9   ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
+console.info("%c 国网信息卡 \n%c   v 3.0   ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 import tinycolor from "./tinycolor.js";
 
@@ -292,17 +292,7 @@ class StateGridPhoneEditor extends LitElement {
           </label>
         </div>
 
-        <div class="form-group">
-          <label>图表宽度：
-            <input 
-              type="text" 
-              @change=${this._valueChanged}
-              .value=${this.config.charwidth !== undefined ? this.config.charwidth : '380px'}
-              name="charwidth"
-              placeholder="只能是px单位，例如: 380px"
-            />
-          </label>
-        </div>
+
 
         <div class="form-group">
             <label class="color-input-wrapper">用电量数据颜色：
@@ -592,9 +582,6 @@ class StateGridPhoneEditor extends LitElement {
         this.requestUpdate();
       }
     });
-    await this._loadApexCharts();
-    this._renderDayChart();
-    this._renderMonthChart();
   }
 
   constructor() {
@@ -754,7 +741,6 @@ class StateGridInfo extends LitElement {
     return {
       hass: { type: Object },
       width: { type: String, attribute: true },
-      charwidth: { type: String, attribute: true },
       height: { type: String, attribute: true },
       year: { type: Number },
       month: { type: Number },
@@ -778,7 +764,6 @@ class StateGridInfo extends LitElement {
     this.config = config;
     if (config) {
       if (config.width !== undefined) this.width = config.width;
-      if (config.charwidth !== undefined) this.charwidth = config.charwidth;
       if (config.year !== undefined) this.year = config.year;
       if (config.month !== undefined) this.month = config.month;
       if (config.color_num !== undefined) this.colorNum = config.color_num;
@@ -796,7 +781,6 @@ class StateGridInfo extends LitElement {
     this.year = today.getFullYear();
     this.month = today.getMonth() + 1;
     this.width = '380px';
-    this.charwidth = '380px';
     this.theme = 'on';
     this.dayData = [];
     this.activeNav = '';
@@ -843,7 +827,6 @@ class StateGridInfo extends LitElement {
     }    
 
   }
-
 
   async _loadBalanceData() {
     if (!this.hass || !this.config.entities) return;
@@ -1879,8 +1862,8 @@ class StateGridInfo extends LitElement {
       }
       #chart-container {
         grid-area: chart;
-        height: 100%;
         width: 100%;
+        height: 100%;
       }
 
      `;
@@ -1994,8 +1977,35 @@ class StateGridInfo extends LitElement {
       this._chart.destroy();
       this._chart = null;
     }
-    this._chart = new ApexCharts(container, this._getChartDayConfig(data));
-    this._chart.render();
+    
+    // 使用 setTimeout 确保 DOM 完全渲染后再创建图表
+    setTimeout(() => {
+      if (!container) return;
+      
+      // 获取容器的实际宽度
+      const containerWidth = container.offsetWidth || container.parentElement.offsetWidth;
+      
+      if (containerWidth > 0) {
+        // 临时设置明确的像素宽度
+        container.style.width = containerWidth + 'px';
+        
+        // 创建并渲染图表
+        this._chart = new ApexCharts(container, this._getChartDayConfig(data));
+        this._chart.render();
+        
+        // 渲染完成后恢复百分比宽度（用于响应式）
+        setTimeout(() => {
+          if (container && this._chart) {
+            container.style.width = '100%';
+            this._chart.updateOptions({
+              chart: {
+                width: '100%'
+              }
+            }, false, true);
+          }
+        }, 1000);
+      }
+    }, 0);
   }
 
   _renderMonthChart() {
@@ -2014,8 +2024,36 @@ class StateGridInfo extends LitElement {
       this._chart.destroy();
       this._chart = null;
     }
-    this._chart = new ApexCharts(container, this._getChartMonthConfig(data));
-    this._chart.render();
+    
+    // 使用 setTimeout 确保 DOM 完全渲染后再创建图表
+    setTimeout(() => {
+      if (!container) return;
+      
+      // 获取容器的实际宽度
+      const containerWidth = container.offsetWidth || container.parentElement.offsetWidth;
+      
+      if (containerWidth > 0) {
+        // 临时设置明确的像素宽度
+        container.style.width = containerWidth + 'px';
+        
+        // 创建并渲染图表
+        this._chart = new ApexCharts(container, this._getChartMonthConfig(data));
+        this._chart.render();
+        
+        // 渲染完成后恢复百分比宽度（用于响应式）
+        setTimeout(() => {
+          if (container && this._chart) {
+            container.style.width = '100%';
+            this._chart.updateOptions({
+              chart: {
+                width: '100%'
+              }
+            }, false, true);
+          }
+        }, 1000);
+      }
+    }, 0);
+
   }
 
   _loadData() {
@@ -2027,7 +2065,6 @@ class StateGridInfo extends LitElement {
 
   _getChartDayConfig(data) {
     const theme = this._evaluateTheme();
-    const CardWidth = this.config.charwidth ? parseFloat(this.config.charwidth)*0.97 : 380;
     const Color = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
     const BgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
     const maxElectricity = Math.max(...data.electricity.map(item => item.y));
@@ -2063,8 +2100,8 @@ class StateGridInfo extends LitElement {
       },
       chart: {
         type: 'line',
-        height: 210,
-        width: CardWidth,
+        height: 230,
+        width: '100%',
         foreColor: Color,
         toolbar: { show: false },
         animations: {
@@ -2261,7 +2298,6 @@ class StateGridInfo extends LitElement {
 
   _getChartMonthConfig(data) {
     const theme = this._evaluateTheme();
-    const CardWidth = this.config.charwidth ? parseFloat(this.config.charwidth)*0.97 : 380;
     const Color = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
     const BgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
     const maxElectricity = Math.max(...data.electricity.map(item => item.y));
@@ -2311,8 +2347,8 @@ class StateGridInfo extends LitElement {
       },
       chart: {
         type: 'line',
-        height: 210,
-        width: CardWidth,
+        height: 230,
+        width: '100%',
         foreColor: Color,
         toolbar: { show: false },
         animations: {

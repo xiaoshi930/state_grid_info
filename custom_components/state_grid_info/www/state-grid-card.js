@@ -1,4 +1,4 @@
-console.info("%c 国网信息卡 \n%c   v 3.2   ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
+console.info("%c 国网信息卡 \n%c   v 3.3   ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 import tinycolor from "./tinycolor.js";
 
@@ -1864,6 +1864,8 @@ class StateGridInfo extends LitElement {
         grid-area: chart;
         width: 100%;
         height: 100%;
+        will-change: transform;
+        transform: translateZ(0);
       }
 
      `;
@@ -2003,9 +2005,9 @@ class StateGridInfo extends LitElement {
               }
             }, false, true);
           }
-        }, 1000);
+        },2000);
       }
-    }, 0);
+    }, 50);
   }
 
   _renderMonthChart() {
@@ -2050,9 +2052,9 @@ class StateGridInfo extends LitElement {
               }
             }, false, true);
           }
-        }, 1000);
+        }, 2000);
       }
-    }, 0);
+    }, 50);
 
   }
 
@@ -2107,7 +2109,12 @@ class StateGridInfo extends LitElement {
         animations: {
           enabled: true,
           dynamicAnimation: {
-            enabled: false
+            enabled: true
+          },
+          easing: 'linear',
+          speed: 1000,
+          initialAnimation: {
+            enabled: true
           }
         }
       },
@@ -2359,8 +2366,13 @@ class StateGridInfo extends LitElement {
         toolbar: { show: false },
         animations: {
           enabled: true,
-          dynamicAnimation: { 
-            enabled: false
+          dynamicAnimation: {
+            enabled: true
+          },
+          easing: 'linear',
+          speed: 1000,
+          initialAnimation: {
+            enabled: true
           }
         }
       },
@@ -3555,6 +3567,7 @@ class StateGridInfo extends LitElement {
       }
         
 
+    const daydate = selectedEntity.attributes?.daylist[0]?.day || '无';
     return html`
         <div class="card-main" style="background: ${BgColor}; color: ${Color}">
           <div class="top-section">
@@ -3563,6 +3576,7 @@ class StateGridInfo extends LitElement {
               <div class="top-content">
                 <img src=${svgpath} class="balance-icon" alt="国网图标">
                 <div class="balance-time">${selectedEntity.attributes?.date || ''}</div>
+                <div class="balance-time">数据日期:${daydate}</div>
                 
               </div>
               

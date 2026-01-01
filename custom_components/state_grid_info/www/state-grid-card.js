@@ -1,4 +1,4 @@
-console.info("%c 国网信息卡 \n%c   v 3.1   ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
+console.info("%c 国网信息卡 \n%c   v 3.2   ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 import tinycolor from "./tinycolor.js";
 
@@ -2300,11 +2300,17 @@ class StateGridInfo extends LitElement {
     const theme = this._evaluateTheme();
     const Color = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
     const BgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
-    const maxElectricity = Math.max(...data.electricity.map(item => item.y));
-    const minElectricity  = Math.min(...data.electricity.map(item => item.y));
-    const maxCost = Math.max(...data.cost.map(item => item.y));
-    const maxElectricityPoint  = data.electricity.find(item => item.y === maxElectricity);
-    const maxCostPoint  = data.cost.find(item => item.y === maxCost);
+    
+    // 处理空数组情况，使用 0 作为默认值
+    const electricityValues = data.electricity.map(item => item.y);
+    const costValues = data.cost.map(item => item.y);
+    
+    const maxElectricity = electricityValues.length > 0 ? Math.max(...electricityValues) : 0;
+    const minElectricity = electricityValues.length > 0 ? Math.min(...electricityValues) : 0;
+    const maxCost = costValues.length > 0 ? Math.max(...costValues) : 0;
+    const maxElectricityPoint = data.electricity.find(item => item.y === maxElectricity);
+    const maxCostPoint = data.cost.find(item => item.y === maxCost);
+    
     const colorCost = this.colorCost;
     const colorNum = this.colorNum;
     const colorMax = tinycolor(colorNum).spin(20).toHexString();
@@ -2360,6 +2366,10 @@ class StateGridInfo extends LitElement {
       },
       colors: [
         function({value}) {
+          // 当没有数据时，返回默认颜色
+          if (maxElectricity === 0 && minElectricity === 0) {
+            return colorNum;
+          }
           if (value < (3 * minElectricity + maxElectricity) / 4) {
             return colorMin;
           }
@@ -2419,72 +2429,83 @@ class StateGridInfo extends LitElement {
         },
       },
       annotations: {
-        points: [
-          {
-            x: maxElectricityPoint.x,
-            y: maxElectricityPoint.y,
-            seriesIndex: 1,
-            marker: {
-              size: 0
-            },
-            label: {
-              borderColor: '#ffffff00', 
-              offsetY: -5,
-              offsetX: 0,
-              style: {
-                color: Color,
-                background: '#ffffff00', 
-                fontSize: '12px',
-                fontWeight: 'bold'
+        points: (() => {
+          const points = [];
+          
+          // 只有当有数据时才添加标注点
+          if (maxElectricityPoint) {
+            points.push({
+              x: maxElectricityPoint.x,
+              y: maxElectricityPoint.y,
+              seriesIndex: 1,
+              marker: {
+                size: 0
               },
-              text: `${maxElectricity.toFixed(2)}度`
-            }
-          },
-          {
-            x: maxElectricityPoint.x,
-            y: maxElectricityPoint.y,
-            seriesIndex: 1,
-            marker: {
-              size: 4,
-              offsetX: 0, 
-              fillColor: '#fff',
-              strokeColor: colorNum,
-              strokeWidth: 1,
-              shape: "circle",
-            },
-            label: {
-              offsetY: 0,
-              offsetX: 0,
-              style: {
-                color: Color,
-                fontSize: '12px',
-                fontWeight: 'bold'
+              label: {
+                borderColor: '#ffffff00',
+                offsetY: -5,
+                offsetX: 0,
+                style: {
+                  color: Color,
+                  background: '#ffffff00',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                },
+                text: `${maxElectricity.toFixed(2)}度`
+              }
+            });
+
+            points.push({
+              x: maxElectricityPoint.x,
+              y: maxElectricityPoint.y,
+              seriesIndex: 1,
+              marker: {
+                size: 4,
+                offsetX: 0,
+                fillColor: '#fff',
+                strokeColor: colorNum,
+                strokeWidth: 1,
+                shape: "circle",
               },
-              text: ' '
-            } 
-          },
-          {
-            x: maxCostPoint.x,
-            y: maxCostPoint.y,
-            seriesIndex: 3,
-            marker: {
-              size: 0,
-              strokeColor: colorNum,
-            },
-            label: {
-              borderColor: '#ffffff00', 
-              offsetY: -5,
-              offsetX: 0, 
-              style: {
-                color: Color,
-                background: '#ffffff00', 
-                fontSize: '12px',
-                fontWeight: 'bold'
-              },
-              text: `${maxCost.toFixed(2)}元`
-            }
+              label: {
+                offsetY: 0,
+                offsetX: 0,
+                style: {
+                  color: Color,
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                },
+                text: ' '
+              }
+            });
           }
-        ]
+          
+          if (maxCostPoint) {
+            points.push({
+              x: maxCostPoint.x,
+              y: maxCostPoint.y,
+              seriesIndex: 3,
+              marker: {
+                size: 0,
+                strokeColor: colorNum,
+              },
+              label: {
+                borderColor: '#ffffff00',
+                offsetY: -5,
+                offsetX: 0,
+                style: {
+                  color: Color,
+                  background: '#ffffff00',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                },
+                text: `${maxCost.toFixed(2)}元`
+              }
+            });
+          }
+          
+          return points;
+        })()
       },
       tooltip: {
         shared: true,

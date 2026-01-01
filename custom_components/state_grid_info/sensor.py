@@ -456,7 +456,7 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
             daylist6 = sorted(daylist5.values(), key=lambda x: x["day"])
             
             # 取最新的370个数据（总数大概370-390波动）
-            daylist7 = list(reversed(daylist6))[:370]
+            daylist7 = list(reversed(daylist6))
             
             # 先创建一个临时数据结构，用于计算电费
             # 这样可以确保在计算电费时 self.data 不为 None
@@ -1140,20 +1140,26 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
         try:
             # 确保月列表按时间降序排序（最新的月份在前）
             month_list = sorted(month_list, key=lambda x: x["month"], reverse=True)
-            
+
             # 增加当月数据（如果不存在）
             now = datetime.now()
             current_month_str = now.strftime("%Y-%m")
+
             if not any(item["month"] == current_month_str for item in month_list):
                 # 计算当月数据
                 current_month_data = self._calculate_month_data(day_list, current_month_str)
                 if current_month_data:
                     month_list.insert(0, current_month_data)
-            
+
             # 增加上月数据（如果不存在）
-            prev_month = datetime(now.year, now.month - 1 if now.month > 1 else 12, 1)
+            if now.month == 1:
+                # 如果当前是1月，上月是上一年12月
+                prev_month = datetime(now.year - 1, 12, 1)
+            else:
+                # 其他情况，上月是当前年的上个月
+                prev_month = datetime(now.year, now.month - 1, 1)
             prev_month_str = prev_month.strftime("%Y-%m")
-            
+
             if not any(item["month"] == prev_month_str for item in month_list):
                 # 计算上月数据
                 prev_month_data = self._calculate_month_data(day_list, prev_month_str)
@@ -1199,17 +1205,17 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
         try:
             year_month = month_str.replace('-', '')
             days_in_month = [day for day in day_list if day["day"].replace('-', '')[:6] == year_month]
-            
+
             if not days_in_month:
                 return None
-            
+
             month_ele_num = sum(float(day.get("dayEleNum", 0)) for day in days_in_month)
             month_tpq = sum(float(day.get("dayTPq", 0)) for day in days_in_month)
             month_ppq = sum(float(day.get("dayPPq", 0)) for day in days_in_month)
             month_npq = sum(float(day.get("dayNPq", 0)) for day in days_in_month)
             month_vpq = sum(float(day.get("dayVPq", 0)) for day in days_in_month)
             month_ele_cost = sum(float(day.get("dayEleCost", 0)) for day in days_in_month)
-            
+
             return {
                 "month": month_str,
                 "monthEleNum": float(round(month_ele_num, 2)),

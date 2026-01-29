@@ -299,17 +299,17 @@ class StateGridPhoneEditor extends LitElement {
               <input 
                 type="color" 
                 @change=${this._valueChanged}
-                .value=${this.config.color_num !== undefined ? this.config.color_num : '#08b3a5'}
+                .value=${this.config.color_num !== undefined ? this.config.color_num : '#07d2ff'}
                 name="color_num"
                 class="color-input"
               />
               <input 
                 type="text" 
                 @change=${this._valueChanged}
-                .value=${this.config.color_num !== undefined ? this.config.color_num : '#08b3a5'}
+                .value=${this.config.color_num !== undefined ? this.config.color_num : '#07d2ffff'}
                 name="color_num"
                 class="color-text"
-                placeholder="#08b3a5"
+                placeholder="#07d2ff"
               />
           </label>
         </div>
@@ -319,19 +319,19 @@ class StateGridPhoneEditor extends LitElement {
             <input 
               type="color" 
               @change=${this._valueChanged}
-              .value=${this.config.color_cost !== undefined ? this.config.color_cost : '#770ef6'}
+              .value=${this.config.color_cost !== undefined ? this.config.color_cost : '#f30660'}
               name="color_cost"
               class="color-input"
             />
             <input 
               type="text" 
               @change=${this._valueChanged}
-              .value=${this.config.color_cost !== undefined ? this.config.color_cost : '#770ef6'}
+              .value=${this.config.color_cost !== undefined ? this.config.color_cost : '#f30660'}
               name="color_cost"
               class="color-text"
-              placeholder="#770ef6"
+              placeholder="#f30660"
             />
-            </label>
+          </label>
         </div>
 
         <div class="form-group">
@@ -785,8 +785,8 @@ class StateGridInfo extends LitElement {
     this.dayData = [];
     this.activeNav = '';
     this.monthData = null;
-    this.colorNum = '#08b3a5';
-    this.colorCost = '#770ef6';
+    this.colorNum = '#07d2ff';
+    this.colorCost = '#f30660';
     this.showPanel = ''; // 初始不显示任何面板
     this._balanceData = [];
     this._balanceLoading = false;
@@ -808,6 +808,23 @@ class StateGridInfo extends LitElement {
     super.disconnectedCallback();
     if (this._balanceRefreshInterval) {
       clearInterval(this._balanceRefreshInterval);
+    }
+    // 清理所有定时器
+    if (this._dayChartUpdateTimeout) {
+      clearTimeout(this._dayChartUpdateTimeout);
+      this._dayChartUpdateTimeout = null;
+    }
+    if (this._monthChartUpdateTimeout) {
+      clearTimeout(this._monthChartUpdateTimeout);
+      this._monthChartUpdateTimeout = null;
+    }
+    if (this._dayChartRenderTimeout) {
+      clearTimeout(this._dayChartRenderTimeout);
+      this._dayChartRenderTimeout = null;
+    }
+    if (this._monthChartRenderTimeout) {
+      clearTimeout(this._monthChartRenderTimeout);
+      this._monthChartRenderTimeout = null;
     }
     if (this._chart) {
       this._chart.destroy();
@@ -1887,16 +1904,32 @@ class StateGridInfo extends LitElement {
     if (!selectedEntityId || !this.hass || !this.hass.states[selectedEntityId]) {
       return {};
     }
-    
+
     const selectedEntity = this.hass.states[selectedEntityId];
 
-    if (!selectedEntity?.attributes?.daylist) return null; 
+    if (!selectedEntity?.attributes?.daylist) return null;
     const daylist = selectedEntity.attributes.daylist.slice(0, 30);
     const currentDay = daylist[0] || {};
     return {
-      electricity: daylist.map(item => ({
+      tip: daylist.map(item => ({
         x: new Date(item.day.split(' ')[0]).getTime(),
-        y: Number(item.dayEleNum) || 0
+        y: Number(item.dayTPq) || 0
+      })),
+      peak: daylist.map(item => ({
+        x: new Date(item.day.split(' ')[0]).getTime(),
+        y: Number(item.dayPPq) || 0
+      })),
+      normal: daylist.map(item => ({
+        x: new Date(item.day.split(' ')[0]).getTime(),
+        y: Number(item.dayNPq) || 0
+      })),
+      valley: daylist.map(item => ({
+        x: new Date(item.day.split(' ')[0]).getTime(),
+        y: Number(item.dayVPq) || 0
+      })),
+      total: daylist.map(item => ({
+        x: new Date(item.day.split(' ')[0]).getTime(),
+        y: (Number(item.dayTPq) || 0) + (Number(item.dayPPq) || 0) + (Number(item.dayNPq) || 0) + (Number(item.dayVPq) || 0)
       })),
       cost: daylist.map(item => ({
         x: new Date(item.day.split(' ')[0]).getTime(),
@@ -1910,12 +1943,12 @@ class StateGridInfo extends LitElement {
     };
   }
 
-  get _processedMonthData() {    
+  get _processedMonthData() {
     const selectedEntityId = this._selectedBalanceEntity;
     if (!selectedEntityId || !this.hass || !this.hass.states[selectedEntityId]) {
       return {};
     }
-    
+
     const selectedEntity = this.hass.states[selectedEntityId];
 
     const lastYear  = (new Date().getFullYear() - 1).toString();
@@ -1923,10 +1956,10 @@ class StateGridInfo extends LitElement {
 
     if (!selectedEntity?.attributes?.monthlist) return null;
     // 确保数据安全，处理可能为空的情况
-    const lastYearBills = selectedEntity.attributes.monthlist.filter(item => 
+    const lastYearBills = selectedEntity.attributes.monthlist.filter(item =>
       item?.month && item.month.startsWith(lastYear)
     ) || [];
-    const thisYearBills = selectedEntity.attributes.monthlist.filter(item => 
+    const thisYearBills = selectedEntity.attributes.monthlist.filter(item =>
       item?.month && item.month.startsWith(currentYear)
     ) || [];
     const lastmonthlist = [...lastYearBills ].slice(0, 12).reverse();
@@ -1934,9 +1967,25 @@ class StateGridInfo extends LitElement {
     const lastmonthlistDay = [...lastYearBills ][0];
     const monthlistDay = [...thisYearBills][0];
     return {
-      electricity: monthlist.map(item => ({
+      tip: monthlist.map(item => ({
         x: new Date(item.month.substr(0,7)+'-01').getTime(),
-        y: Number(item.monthEleNum) || 0
+        y: Number(item.monthTPq) || 0
+      })),
+      peak: monthlist.map(item => ({
+        x: new Date(item.month.substr(0,7)+'-01').getTime(),
+        y: Number(item.monthPPq) || 0
+      })),
+      normal: monthlist.map(item => ({
+        x: new Date(item.month.substr(0,7)+'-01').getTime(),
+        y: Number(item.monthNPq) || 0
+      })),
+      valley: monthlist.map(item => ({
+        x: new Date(item.month.substr(0,7)+'-01').getTime(),
+        y: Number(item.monthVPq) || 0
+      })),
+      total: monthlist.map(item => ({
+        x: new Date(item.month.substr(0,7)+'-01').getTime(),
+        y: (Number(item.monthTPq) || 0) + (Number(item.monthPPq) || 0) + (Number(item.monthNPq) || 0) + (Number(item.monthVPq) || 0)
       })),
       cost: monthlist.map(item => ({
         x: new Date(item.month.substr(0,7)+'-01').getTime(),
@@ -1947,9 +1996,25 @@ class StateGridInfo extends LitElement {
         cost: monthlistDay?.monthEleCost || 0,
         days: monthlist.length
       },
-      lastelectricity: lastmonthlist.map(item => ({
+      lasttip: lastmonthlist.map(item => ({
         x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
-        y: Number(item.monthEleNum) || 0
+        y: Number(item.monthTPq) || 0
+      })),
+      lastpeak: lastmonthlist.map(item => ({
+        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
+        y: Number(item.monthPPq) || 0
+      })),
+      lastnormal: lastmonthlist.map(item => ({
+        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
+        y: Number(item.monthNPq) || 0
+      })),
+      lastvalley: lastmonthlist.map(item => ({
+        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
+        y: Number(item.monthVPq) || 0
+      })),
+      lasttotal: lastmonthlist.map(item => ({
+        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
+        y: (Number(item.monthTPq) || 0) + (Number(item.monthPPq) || 0) + (Number(item.monthNPq) || 0) + (Number(item.monthVPq) || 0)
       })),
       lastcost: lastmonthlist.map(item => ({
         x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
@@ -1979,33 +2044,46 @@ class StateGridInfo extends LitElement {
       this._chart.destroy();
       this._chart = null;
     }
-    
+
+    // 清理之前的定时器
+    if (this._dayChartRenderTimeout) {
+      clearTimeout(this._dayChartRenderTimeout);
+    }
+    if (this._dayChartUpdateTimeout) {
+      clearTimeout(this._dayChartUpdateTimeout);
+    }
+
     // 使用 setTimeout 确保 DOM 完全渲染后再创建图表
-    setTimeout(() => {
+    this._dayChartRenderTimeout = setTimeout(() => {
       if (!container) return;
-      
+
       // 获取容器的实际宽度
       const containerWidth = container.offsetWidth || container.parentElement.offsetWidth;
-      
+
       if (containerWidth > 0) {
         // 临时设置明确的像素宽度
         container.style.width = containerWidth + 'px';
-        
+
         // 创建并渲染图表
         this._chart = new ApexCharts(container, this._getChartDayConfig(data));
         this._chart.render();
-        
+
         // 渲染完成后恢复百分比宽度（用于响应式）
-        setTimeout(() => {
-          if (container && this._chart) {
-            container.style.width = '100%';
-            this._chart.updateOptions({
-              chart: {
-                width: '100%'
-              }
-            }, false, true);
+        this._dayChartUpdateTimeout = setTimeout(() => {
+          // 多重检查：容器存在、图表实例存在、容器仍在DOM中
+          if (container && this._chart && document.body.contains(container)) {
+            try {
+              container.style.width = '100%';
+              this._chart.updateOptions({
+                chart: {
+                  width: '100%'
+                }
+              }, false, true);
+            } catch (error) {
+              console.warn('Day chart updateOptions error:', error);
+            }
           }
-        },2000);
+        }, 2000);
       }
     }, 50);
   }
@@ -2026,31 +2104,44 @@ class StateGridInfo extends LitElement {
       this._chart.destroy();
       this._chart = null;
     }
-    
+
+    // 清理之前的定时器
+    if (this._monthChartRenderTimeout) {
+      clearTimeout(this._monthChartRenderTimeout);
+    }
+    if (this._monthChartUpdateTimeout) {
+      clearTimeout(this._monthChartUpdateTimeout);
+    }
+
     // 使用 setTimeout 确保 DOM 完全渲染后再创建图表
-    setTimeout(() => {
+    this._monthChartRenderTimeout = setTimeout(() => {
       if (!container) return;
-      
+
       // 获取容器的实际宽度
       const containerWidth = container.offsetWidth || container.parentElement.offsetWidth;
-      
+
       if (containerWidth > 0) {
         // 临时设置明确的像素宽度
         container.style.width = containerWidth + 'px';
-        
+
         // 创建并渲染图表
         this._chart = new ApexCharts(container, this._getChartMonthConfig(data));
         this._chart.render();
-        
+
         // 渲染完成后恢复百分比宽度（用于响应式）
-        setTimeout(() => {
-          if (container && this._chart) {
-            container.style.width = '100%';
-            this._chart.updateOptions({
-              chart: {
-                width: '100%'
-              }
-            }, false, true);
+        this._monthChartUpdateTimeout = setTimeout(() => {
+          // 多重检查：容器存在、图表实例存在、容器仍在DOM中
+          if (container && this._chart && document.body.contains(container)) {
+            try {
+              container.style.width = '100%';
+              this._chart.updateOptions({
+                chart: {
+                  width: '100%'
+                }
+              }, false, true);
+            } catch (error) {
+              console.warn('Month chart updateOptions error:', error);
+            }
           }
         }, 2000);
       }
@@ -2069,42 +2160,56 @@ class StateGridInfo extends LitElement {
     const theme = this._evaluateTheme();
     const Color = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
     const BgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
-    const maxElectricity = Math.max(...data.electricity.map(item => item.y));
-    const minElectricity  = Math.min(...data.electricity.map(item => item.y));
-    const maxCost = Math.max(...data.cost.map(item => item.y));
-    const maxElectricityPoint  = data.electricity.find(item => item.y === maxElectricity);
-    const maxCostPoint  = data.cost.find(item => item.y === maxCost);
+
+    // 计算总用电量的最大值
+    const totalValues = data.total.map(item => item.y);
+    const maxTotal = totalValues.length > 0 ? Math.max(...totalValues) : 0;
+    const maxTotalPoint = data.total.find(item => item.y === maxTotal);
+
     const colorCost = this.colorCost;
     const colorNum = this.colorNum;
-    const colorMax = tinycolor(colorNum).spin(20).toHexString();
-    const colorMin = tinycolor(colorNum).spin(-20).toHexString();
+
+    // 尖峰平谷颜色
+    const colorTip = '#FF5252';     // 尖 - 红色
+    const colorPeak = '#FF9800';    // 峰 - 橙色
+    const colorNormal = '#4CAF50';  // 平 - 绿色
+    const colorValley = '#00BCD4';  // 谷 - 青色
+
     return {
       series: [
         {
-          name: `日用电量`,
-          data: data.electricity,
-          type: 'column',
-          zIndex: 0
+          name: '尖时段',
+          data: data.tip,
+          type: 'column'
         },
         {
-          name: `日用电金额`,
+          name: '峰时段',
+          data: data.peak,
+          type: 'column'
+        },
+        {
+          name: '平时段',
+          data: data.normal,
+          type: 'column'
+        },
+        {
+          name: '谷时段',
+          data: data.valley,
+          type: 'column'
+        },
+        {
+          name: '电费',
           data: data.cost,
           type: 'line',
-          color: colorCost,
-          zIndex: 1
+          color: colorCost
         }
-      ],      
-      markers: {
-        size: 3,
-        strokeWidth: 1,
-        colors: colorCost,
-        strokeColors: "#fff"
-      },
+      ],
       chart: {
-        type: 'line',
+        type: 'bar',
         height: 230,
         width: '100%',
         foreColor: Color,
+        stacked: true,
         toolbar: { show: false },
         animations: {
           enabled: true,
@@ -2118,21 +2223,48 @@ class StateGridInfo extends LitElement {
           }
         }
       },
-      colors: [
-        function({value}) {
-          if (value < (3 * minElectricity + maxElectricity) / 4) {
-            return colorMin;
+      plotOptions: {
+        bar: {
+          horizontal: false,
+          borderRadius: 0,
+          columnWidth: '30%',
+          barHeight: '70%',
+          distributed: false,
+          stacking: 'normal',
+          rangeBarOverlap: true,
+          rangeBarGroupRows: false,
+          hideZeroBarsWhenGrouped: false,
+          isDumbbellDiverging: false,
+          dumbbellColors: undefined,
+          isFunnel: false,
+          isFunnel3d: true,
+          dataLabels: {
+            position: 'top',
+            maxItems: 100,
+            hideOverflowingLabels: true,
+            orientation: 'horizontal'
+          },
+          groupOrder: 'asc',
+          groupSize: 1,
+          colors: {
+            ranges: [],
+            backgroundBarColors: [],
+            backgroundBarOpacity: 1,
+            backgroundBarRadius: 0
           }
-          if (value < (minElectricity + 3 * maxElectricity) / 4) {
-            return colorNum;
-          } 
-          else {
-            return colorMax;
-          }
-        }, 
-        colorCost
-      ],
-      stroke: { width: [0, 2], curve: 'smooth' },
+        }
+      },
+      colors: [colorTip, colorPeak, colorNormal, colorValley, colorCost],
+      stroke: { width: [0, 0, 0, 0, 2], curve: 'smooth' },
+      markers: {
+        size: 3,
+        strokeWidth: 1,
+        colors: colorCost,
+        strokeColors: "#fff"
+      },
+      dataLabels: {
+        enabled: false
+      },
       xaxis: {
         type: 'datetime',
         labels: {
@@ -2146,9 +2278,9 @@ class StateGridInfo extends LitElement {
           },
           hideOverlappingLabels: true
         },
-        tooltip: { 
+        tooltip: {
           enabled: false
-        } 
+        }
       },
       yaxis: {
         min: 0,
@@ -2165,123 +2297,135 @@ class StateGridInfo extends LitElement {
         show: true,
         position: 'back',
         xaxis: {
-            lines: {
-                show: false
-            }
-        },   
+          lines: {
+            show: false
+          }
+        },
         yaxis: {
-            lines: {
-                show: false
-            }
-        },  
+          lines: {
+            show: false
+          }
+        },
         row: {
-            colors: [Color, 'transparent'], 
-            opacity: 0.1
+          colors: [Color, 'transparent'],
+          opacity: 0.1
         },
       },
       annotations: {
-        points: [
-          {
-            x: maxElectricityPoint.x,
-            y: maxElectricityPoint.y,
-            seriesIndex: 0,
-            marker: {
-              size: 0
-            },
-            label: {
-              borderColor: '#ffffff00', 
-              offsetY: -5,
-              offsetX: 0,
-              style: {
-                color: Color,
-                background: '#ffffff00', 
-                fontSize: '12px',
-                fontWeight: 'bold'
+        points: (() => {
+          const points = [];
+
+          // 标记最大用电量
+          if (maxTotalPoint) {
+            points.push({
+              x: maxTotalPoint.x,
+              y: maxTotalPoint.y,
+              seriesIndex: 3,
+              marker: {
+                size: 0
               },
-              text: `${maxElectricity.toFixed(2)}度`
-            }
-          },
-          {
-            x: maxElectricityPoint.x,
-            y: maxElectricityPoint.y,
-            seriesIndex: 0,
-            marker: {
-              size: 4,
-              offsetX: 0, 
-              fillColor: '#fff',
-              strokeColor: colorNum,
-              strokeWidth: 1,
-              shape: "circle",
-            },
-            label: {
-              borderColor: '#fff', 
-              offsetY: 0,
-              offsetX: 0,
-              style: {
-                color: '#fff',
-                fontSize: '12px',
-                fontWeight: 'bold'
+              label: {
+                borderColor: '#ffffff00',
+                offsetY: -5,
+                offsetX: 0,
+                style: {
+                  color: Color,
+                  background: '#ffffff00',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                },
+                text: `${maxTotal.toFixed(2)}度`
+              }
+            });
+
+            points.push({
+              x: maxTotalPoint.x,
+              y: maxTotalPoint.y,
+              seriesIndex: 3,
+              marker: {
+                size: 4,
+                offsetX: 0,
+                fillColor: '#fff',
+                strokeColor: colorNum,
+                strokeWidth: 1,
+                shape: "circle",
               },
-              text: ' '
-            }
-          },
-          {
-            x: maxCostPoint.x,
-            y: maxCostPoint.y,
-            seriesIndex: 1,
-            marker: {
-              size: 0,
-              strokeColor: colorNum,
-            },
-            label: {
-              borderColor: '#ffffff00', 
-              offsetY: -5,
-              offsetX: 0, 
-              style: {
-                color: Color,
-                background: '#ffffff00', 
-                fontSize: '12px',
-                fontWeight: 'bold'
-              },
-              text: `${maxCost.toFixed(2)}元`
-            }
+              label: {
+                borderColor: '#fff',
+                offsetY: 0,
+                offsetX: 0,
+                style: {
+                  color: Color,
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                },
+                text: ' '
+              }
+            });
           }
-        ] 
+
+          return points;
+        })()
       },
       tooltip: {
         shared: true,
         intersect: false,
         custom: function({ series, seriesIndex, dataPointIndex, w }) {
-          const firstDate0 = new Date(w.globals.labels[0]);
-          const firstDate = new Date(firstDate0);
-          firstDate.setDate(firstDate.getDate() + 29);
-          const currentDate = new Date(firstDate);  
-          currentDate.setDate(firstDate.getDate() - dataPointIndex);
+          // 使用鼠标悬停位置对应的x值
+          const hoverX = w.globals.seriesX[seriesIndex]?.[dataPointIndex];
+          const currentDate = new Date(hoverX);
           const formattedDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+
           const seriesInfo = [
-            { name: '日电量', unit: '度', color: this.colorNum },
-            { name: '日电费', unit: '元', color: this.colorCost }
+            { name: '谷时段', unit: '度', color: colorValley },
+            { name: '平时段', unit: '度', color: colorNormal },
+            { name: '峰时段', unit: '度', color: colorPeak },
+            { name: '尖时段', unit: '度', color: colorTip },
+            { name: '电费', unit: '元', color: colorCost }
           ];
+
           let tooltipHTML = `
             <div style="background: ${BgColor};color: ${Color};padding: 8px;border-radius: 4px;border: 1px solid ${Color};">
               <div style="font-weight: bold; font-size: 12px;color: ${Color};  border-bottom: 1px dashed #999;">
                 ${formattedDate}
               </div>
           `;
-          series.forEach((_, idx) => {
-            const value = series[idx][dataPointIndex];
-            if (value !== null && value !== undefined) {
+
+          // 计算总用电量
+          let totalElectricity = 0;
+          for (let i = 0; i < 4; i++) {
+            const value = series[i]?.[dataPointIndex] || 0;
+            totalElectricity += value;
+          }
+
+          // 显示总用电量
+          if (totalElectricity > 0) {
+            tooltipHTML += `
+              <div style="display: flex;align-items: center;margin: 0;font-size: 12px;border-bottom: 1px dashed #999;font-weight: bold;">
+                <span style="display: inline-block;width: 8px;height: 8px;background: ${colorNum};border-radius: 50%;margin-right: 5px;"></span>
+                <span style="color: ${Color}">
+                  总用电量:
+                  <strong>${totalElectricity.toFixed(2)} 度</strong>
+                </span>
+              </div>
+            `;
+          }
+
+          series.forEach((s, idx) => {
+            const value = s?.[dataPointIndex];
+            if (value !== null && value !== undefined && value !== 0) {
               tooltipHTML += `
                 <div style="display: flex;align-items: center;margin: 0;font-size: 12px;border-bottom: 1px dashed #999;">
                   <span style="display: inline-block;width: 8px;height: 8px;background: ${seriesInfo[idx].color};border-radius: 50%;margin-right: 5px;"></span>
                   <span style="color: ${seriesInfo[idx].color}">
-                    ${seriesInfo[idx].name}: 
+                    ${seriesInfo[idx].name}:
                     <strong>${value.toFixed(2)} ${seriesInfo[idx].unit}</strong>
                   </span>
                 </div>
               `;
             }
           });
+
           tooltipHTML += `</div>`;
           return tooltipHTML;
         }.bind(this)
@@ -2299,6 +2443,12 @@ class StateGridInfo extends LitElement {
         itemMargin: {
           horizontal: 10
         }
+      },
+      plotOptions: {
+        bar: {
+          borderRadius: 0,
+          columnWidth: '60%'
+        }
       }
     };
   }
@@ -2308,61 +2458,103 @@ class StateGridInfo extends LitElement {
     const Color = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
     const BgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
     
-    // 处理空数组情况，使用 0 作为默认值
-    const electricityValues = data.electricity.map(item => item.y);
-    const costValues = data.cost.map(item => item.y);
-    
-    const maxElectricity = electricityValues.length > 0 ? Math.max(...electricityValues) : 0;
-    const minElectricity = electricityValues.length > 0 ? Math.min(...electricityValues) : 0;
-    const maxCost = costValues.length > 0 ? Math.max(...costValues) : 0;
-    const maxElectricityPoint = data.electricity.find(item => item.y === maxElectricity);
-    const maxCostPoint = data.cost.find(item => item.y === maxCost);
-    
+    // 计算总用电量的最大值
+    const totalValues = data.total.map(item => item.y);
+    const maxTotal = totalValues.length > 0 ? Math.max(...totalValues) : 0;
+    const maxTotalPoint = data.total.find(item => item.y === maxTotal);
+
     const colorCost = this.colorCost;
     const colorNum = this.colorNum;
-    const colorMax = tinycolor(colorNum).spin(20).toHexString();
-    const colorMin = tinycolor(colorNum).spin(-20).toHexString();
+
+    // 尖峰平谷颜色
+    const colorTip = '#FF5252';     // 尖 - 红色
+    const colorPeak = '#FF9800';    // 峰 - 橙色
+    const colorNormal = '#4CAF50';  // 平 - 绿色
+    const colorValley = '#00BCD4';  // 谷 - 青色
+
+    // 上年颜色（带透明度）
+    const colorLastTip = '#FF525280';
+    const colorLastPeak = '#FF980080';
+    const colorLastNormal = '#4CAF5080';
+    const colorLastValley = '#00BCD480';
+
+    // 修改数据结构：为上年数据偏移时间，实现并列显示
+    // 使用较大的偏移量来区分上年和本年
+    const offsetMs = 12 * 24 * 60 * 60 * 1000; // 12天的偏移，确保两组数据清晰分开
+
+    const lasttipOffset = data.lasttip.map(item => ({ x: item.x - offsetMs, y: item.y }));
+    const lastpeakOffset = data.lastpeak.map(item => ({ x: item.x - offsetMs, y: item.y }));
+    const lastnormalOffset = data.lastnormal.map(item => ({ x: item.x - offsetMs, y: item.y }));
+    const lastvalleyOffset = data.lastvalley.map(item => ({ x: item.x - offsetMs, y: item.y }));
+    const lastcostOffset = data.lastcost.map(item => ({ x: item.x - offsetMs, y: item.y }));
+
     return {
       series: [
         {
-          name: `上年电量`,
-          data: data.lastelectricity,
-          type: 'column',
-          zIndex: 0,
-          color: "#f8500080"
+          name: '上年谷',
+          data: lastvalleyOffset,
+          type: 'column'
         },
         {
-          name: `本年电量`,
-          data: data.electricity,
-          type: 'column',
-          zIndex: 1,
+          name: '上年平',
+          data: lastnormalOffset,
+          type: 'column'
         },
         {
-          name: `上年金额`,
-          data: data.lastcost,
+          name: '上年峰',
+          data: lastpeakOffset,
+          type: 'column'
+        },
+        {
+          name: '上年尖',
+          data: lasttipOffset,
+          type: 'column'
+        },
+        {
+          name: '本年谷',
+          data: data.valley,
+          type: 'column'
+        },
+        {
+          name: '本年平',
+          data: data.normal,
+          type: 'column'
+        },
+        {
+          name: '本年峰',
+          data: data.peak,
+          type: 'column'
+        },
+        {
+          name: '本年尖',
+          data: data.tip,
+          type: 'column'
+        },
+        {
+          name: '上年电费',
+          data: lastcostOffset,
           type: 'line',
-          color: "#f30660",
-          zIndex: 2
+          color: '#f3066080'
         },
         {
-          name: `本年金额`,
+          name: '本年电费',
           data: data.cost,
           type: 'line',
-          color: colorCost,
-          zIndex: 3
+          color: colorCost
         }
       ],      
       markers: {
         size: 3,
         strokeWidth: 1,
-        colors: ["#f30660",colorCost],
+        colors: ['#f3066080', colorCost],
         strokeColors: "#fff"
       },
       chart: {
-        type: 'line',
+        type: 'bar',
         height: 230,
         width: '100%',
         foreColor: Color,
+        stacked: true,
         toolbar: { show: false },
         animations: {
           enabled: true,
@@ -2376,24 +2568,51 @@ class StateGridInfo extends LitElement {
           }
         }
       },
-      colors: [
-        function({value}) {
-          // 当没有数据时，返回默认颜色
-          if (maxElectricity === 0 && minElectricity === 0) {
-            return colorNum;
-          }
-          if (value < (3 * minElectricity + maxElectricity) / 4) {
-            return colorMin;
-          }
-          if (value < (minElectricity + 3 * maxElectricity) / 4) {
-            return colorNum;
-          } 
-          else {
-            return colorMax;
+      plotOptions: {
+        bar: {
+          horizontal: false,
+          borderRadius: 0,
+          columnWidth: '30%',
+          barHeight: '70%',
+          distributed: false,
+          stacking: 'normal',
+          rangeBarOverlap: true,
+          rangeBarGroupRows: false,
+          hideZeroBarsWhenGrouped: false,
+          isDumbbellDiverging: false,
+          dumbbellColors: undefined,
+          isFunnel: false,
+          isFunnel3d: true,
+          dataLabels: {
+            position: 'top',
+            maxItems: 100,
+            hideOverflowingLabels: true,
+            orientation: 'horizontal'
+          },
+          groupOrder: 'asc',
+          groupSize: 1,
+          colors: {
+            ranges: [],
+            backgroundBarColors: [],
+            backgroundBarOpacity: 1,
+            backgroundBarRadius: 0
           }
         }
+      },
+      colors: [
+        colorLastValley, colorLastNormal, colorLastPeak, colorLastTip,
+        colorValley, colorNormal, colorPeak, colorTip, '#f3066080', colorCost
       ],
-      stroke: { width: [0,0,2,2], curve: 'smooth' },
+      stroke: { width: [0, 0, 0, 0, 0, 0, 0, 0, 2, 2], curve: 'smooth' },
+      markers: {
+        size: 3,
+        strokeWidth: 1,
+        colors: ['#f3066080', colorCost],
+        strokeColors: "#fff"
+      },
+      dataLabels: {
+        enabled: false
+      },
       xaxis: {
         type: 'datetime',
         labels: {
@@ -2443,13 +2662,13 @@ class StateGridInfo extends LitElement {
       annotations: {
         points: (() => {
           const points = [];
-          
-          // 只有当有数据时才添加标注点
-          if (maxElectricityPoint) {
+
+          // 标记最大用电量
+          if (maxTotalPoint) {
             points.push({
-              x: maxElectricityPoint.x,
-              y: maxElectricityPoint.y,
-              seriesIndex: 1,
+              x: maxTotalPoint.x,
+              y: maxTotalPoint.y,
+              seriesIndex: 8,
               marker: {
                 size: 0
               },
@@ -2463,14 +2682,14 @@ class StateGridInfo extends LitElement {
                   fontSize: '12px',
                   fontWeight: 'bold'
                 },
-                text: `${maxElectricity.toFixed(2)}度`
+                text: `${maxTotal.toFixed(2)}度`
               }
             });
 
             points.push({
-              x: maxElectricityPoint.x,
-              y: maxElectricityPoint.y,
-              seriesIndex: 1,
+              x: maxTotalPoint.x,
+              y: maxTotalPoint.y,
+              seriesIndex: 8,
               marker: {
                 size: 4,
                 offsetX: 0,
@@ -2480,6 +2699,7 @@ class StateGridInfo extends LitElement {
                 shape: "circle",
               },
               label: {
+                borderColor: '#fff',
                 offsetY: 0,
                 offsetX: 0,
                 style: {
@@ -2491,31 +2711,7 @@ class StateGridInfo extends LitElement {
               }
             });
           }
-          
-          if (maxCostPoint) {
-            points.push({
-              x: maxCostPoint.x,
-              y: maxCostPoint.y,
-              seriesIndex: 3,
-              marker: {
-                size: 0,
-                strokeColor: colorNum,
-              },
-              label: {
-                borderColor: '#ffffff00',
-                offsetY: -5,
-                offsetX: 0,
-                style: {
-                  color: Color,
-                  background: '#ffffff00',
-                  fontSize: '12px',
-                  fontWeight: 'bold'
-                },
-                text: `${maxCost.toFixed(2)}元`
-              }
-            });
-          }
-          
+
           return points;
         })()
       },
@@ -2523,37 +2719,100 @@ class StateGridInfo extends LitElement {
         shared: true,
         intersect: false,
         custom: function({ series, seriesIndex, dataPointIndex, w }) {
-          const date = new Date(w.globals.labels[0]);
-          const formattedDate = new Date(date);
-          formattedDate.setMonth(date.getMonth() + dataPointIndex);
-          
-          const displayDate = `${formattedDate.getFullYear()}-${String(formattedDate.getMonth() + 1).padStart(2, '0')}`;
+          // 使用鼠标悬停位置对应的x值
+          const hoverX = w.globals.seriesX[seriesIndex]?.[dataPointIndex];
+
+          // 判断是上年数据还是本年数据，并显示正确的日期
+          // 索引0-3是上年谷、平、峰、尖
+          // 索引4-7是本年谷、平、峰、尖
+          let displayDate;
+          if (seriesIndex >= 0 && seriesIndex <= 3) {
+            // 上年数据，需要加回12天偏移
+            const offsetMs = 12 * 24 * 60 * 60 * 1000;
+            const originalDate = new Date(hoverX + offsetMs);
+            displayDate = `${originalDate.getFullYear()}-${String(originalDate.getMonth() + 1).padStart(2, '0')}`;
+          } else {
+            // 本年数据
+            const originalDate = new Date(hoverX);
+            displayDate = `${originalDate.getFullYear()}-${String(originalDate.getMonth() + 1).padStart(2, '0')}`;
+          }
+
           const seriesInfo = [
-            { name: '上年电量', unit: '度', color: "#f85000" },
-            { name: '本年电量', unit: '度', color: this.colorNum },
-            { name: '上年电费', unit: '元', color: "#f30660" },
-            { name: '本年电费', unit: '元', color: this.colorCost }
+            { name: '上年谷', unit: '度', color: colorLastValley },
+            { name: '上年平', unit: '度', color: colorLastNormal },
+            { name: '上年峰', unit: '度', color: colorLastPeak },
+            { name: '上年尖', unit: '度', color: colorLastTip },
+            { name: '本年谷', unit: '度', color: colorValley },
+            { name: '本年平', unit: '度', color: colorNormal },
+            { name: '本年峰', unit: '度', color: colorPeak },
+            { name: '本年尖', unit: '度', color: colorTip },
+            { name: '上年电费', unit: '元', color: '#f3066080' },
+            { name: '本年电费', unit: '度', color: colorCost }
           ];
+
           let tooltipHTML = `
             <div style="background: ${BgColor};color: ${Color};padding: 8px;border-radius: 4px;border: 1px solid ${Color};">
               <div style="font-weight: bold; font-size: 12px;color: ${Color};  border-bottom: 1px dashed #999;">
-                ${displayDate }
+                ${displayDate}
               </div>
           `;
-          series.forEach((_, idx) => {
-            const value = series[idx][dataPointIndex];
-            if (value !== null && value !== undefined) {
+
+          // 计算上年总用电量 (索引0-3是上年谷、平、峰、尖)
+          let lastTotal = 0;
+          for (let i = 0; i < 4; i++) {
+            const value = series[i]?.[dataPointIndex] || 0;
+            lastTotal += value;
+          }
+
+          // 计算本年总用电量 (索引4-7是本年谷、平、峰、尖)
+          let currentTotal = 0;
+          const currentIndices = [1, 3, 5, 7];
+          for (const i of currentIndices) {
+            const value = series[i]?.[dataPointIndex] || 0;
+            currentTotal += value;
+          }
+
+          // 显示上年总用电量
+          if (lastTotal > 0) {
+            tooltipHTML += `
+              <div style="display: flex;align-items: center;margin: 0;font-size: 12px;border-bottom: 1px dashed #999;font-weight: bold;">
+                <span style="display: inline-block;width: 8px;height: 8px;background: #f85000;border-radius: 50%;margin-right: 5px;"></span>
+                <span style="color: ${Color}">
+                  上年用电量:
+                  <strong>${lastTotal.toFixed(2)} 度</strong>
+                </span>
+              </div>
+            `;
+          }
+
+          // 显示本年总用电量
+          if (currentTotal > 0) {
+            tooltipHTML += `
+              <div style="display: flex;align-items: center;margin: 0;font-size: 12px;border-bottom: 1px dashed #999;font-weight: bold;">
+                <span style="display: inline-block;width: 8px;height: 8px;background: ${colorNum};border-radius: 50%;margin-right: 5px;"></span>
+                <span style="color: ${Color}">
+                  本年用电量:
+                  <strong>${currentTotal.toFixed(2)} 度</strong>
+                </span>
+              </div>
+            `;
+          }
+
+          series.forEach((s, idx) => {
+            const value = s?.[dataPointIndex];
+            if (value !== null && value !== undefined && value !== 0) {
               tooltipHTML += `
                 <div style="display: flex;align-items: center;margin: 0;font-size: 12px;border-bottom: 1px dashed #999;">
                   <span style="display: inline-block;width: 8px;height: 8px;background: ${seriesInfo[idx].color};border-radius: 50%;margin-right: 5px;"></span>
                   <span style="color: ${seriesInfo[idx].color}">
-                    ${seriesInfo[idx].name}: 
+                    ${seriesInfo[idx].name}:
                     <strong>${value.toFixed(2)} ${seriesInfo[idx].unit}</strong>
                   </span>
                 </div>
               `;
             }
           });
+
           tooltipHTML += `</div>`;
           return tooltipHTML;
         }.bind(this)
@@ -2571,6 +2830,12 @@ class StateGridInfo extends LitElement {
         },
         itemMargin: {
           horizontal: 10
+        }
+      },
+      plotOptions: {
+        bar: {
+          borderRadius: 0,
+          columnWidth: '30%'
         }
       }
     };

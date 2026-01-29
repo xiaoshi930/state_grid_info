@@ -1,4 +1,4 @@
-console.info("%c 国网信息卡 \n%c   v 3.4   ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
+console.info("%c 消逝卡-电费卡 \n%c        v 3.5 ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 import tinycolor from "./tinycolor.js";
 
@@ -994,7 +994,7 @@ class StateGridInfo extends LitElement {
 
       .card-main{
         border-radius: 10px;
-        padding: 10px;
+        padding: 8px;
         padding-bottom: 0px;
         margin-top: 5px;
         margin-bottom: 0px;
@@ -1008,8 +1008,8 @@ class StateGridInfo extends LitElement {
       
       .top-section {
         display: grid;
-        grid-template-columns: 33% 66.66%;
-        gap: 8px;
+        grid-template-columns: 32.8% 65.8%;
+        gap: 1.4%;
         margin-bottom: 8px;
         height: 100%;
         align-items: end;
@@ -2963,8 +2963,14 @@ class StateGridInfo extends LitElement {
     this._handleClick();
   }
 
-   _handleClick() {
-     navigator.vibrate(50);
+  _handleClick(){
+    const hapticEvent = new Event('haptic', {
+      bubbles: true,
+      cancelable: false,
+      composed: true
+    });
+    hapticEvent.detail = 'light';
+    this.dispatchEvent(hapticEvent);
   }
   
   _evaluateTheme() {

@@ -1,6 +1,5 @@
-console.info("%c 消逝卡-电费卡 \n%c        v 3.5 ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
+console.info("%c 消逝卡-电费卡 \n%c        v 3.6 ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
-import tinycolor from "./tinycolor.js";
 
 class StateGridPhoneEditor extends LitElement {
   static get properties() {
@@ -2178,13 +2177,8 @@ class StateGridInfo extends LitElement {
     return {
       series: [
         {
-          name: '尖时段',
-          data: data.tip,
-          type: 'column'
-        },
-        {
-          name: '峰时段',
-          data: data.peak,
+          name: '谷时段',
+          data: data.valley,
           type: 'column'
         },
         {
@@ -2193,12 +2187,17 @@ class StateGridInfo extends LitElement {
           type: 'column'
         },
         {
-          name: '谷时段',
-          data: data.valley,
+          name: '峰时段',
+          data: data.peak,
           type: 'column'
         },
         {
-          name: '电费',
+          name: '尖时段',
+          data: data.tip,
+          type: 'column'
+        },
+        {
+          name: '日电费',
           data: data.cost,
           type: 'line',
           color: colorCost
@@ -2254,7 +2253,7 @@ class StateGridInfo extends LitElement {
           }
         }
       },
-      colors: [colorTip, colorPeak, colorNormal, colorValley, colorCost],
+      colors: [colorValley, colorNormal, colorPeak, colorTip, colorCost],
       stroke: { width: [0, 0, 0, 0, 2], curve: 'smooth' },
       markers: {
         size: 3,
@@ -2376,12 +2375,13 @@ class StateGridInfo extends LitElement {
           const currentDate = new Date(hoverX);
           const formattedDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
 
+          // 日图表series顺序：0谷时段,1平时段,2峰时段,3尖时段,4日电费
           const seriesInfo = [
-            { name: '谷时段', unit: '度', color: colorValley },
-            { name: '平时段', unit: '度', color: colorNormal },
-            { name: '峰时段', unit: '度', color: colorPeak },
-            { name: '尖时段', unit: '度', color: colorTip },
-            { name: '电费', unit: '元', color: colorCost }
+            { name: '尖时段', unit: '度', color: colorTip, seriesIndex: 3 },
+            { name: '峰时段', unit: '度', color: colorPeak, seriesIndex: 2 },
+            { name: '平时段', unit: '度', color: colorNormal, seriesIndex: 1 },
+            { name: '谷时段', unit: '度', color: colorValley, seriesIndex: 0 },
+            { name: '日电费', unit: '元', color: colorCost, seriesIndex: 4 }
           ];
 
           let tooltipHTML = `
@@ -2411,15 +2411,17 @@ class StateGridInfo extends LitElement {
             `;
           }
 
-          series.forEach((s, idx) => {
-            const value = s?.[dataPointIndex];
-            if (value !== null && value !== undefined && value !== 0) {
+          // 遍历seriesInfo数组显示数据
+          seriesInfo.forEach((info) => {
+            const value = series[info.seriesIndex]?.[dataPointIndex];
+            // 电费数据总是显示（即使为0），其他数据只在非0时显示
+            if (value !== null && value !== undefined && (value !== 0 || info.unit === '元')) {
               tooltipHTML += `
                 <div style="display: flex;align-items: center;margin: 0;font-size: 12px;border-bottom: 1px dashed #999;">
-                  <span style="display: inline-block;width: 8px;height: 8px;background: ${seriesInfo[idx].color};border-radius: 50%;margin-right: 5px;"></span>
-                  <span style="color: ${seriesInfo[idx].color}">
-                    ${seriesInfo[idx].name}:
-                    <strong>${value.toFixed(2)} ${seriesInfo[idx].unit}</strong>
+                  <span style="display: inline-block;width: 8px;height: 8px;background: ${info.color};border-radius: 50%;margin-right: 5px;"></span>
+                  <span style="color: ${info.color}">
+                    ${info.name}:
+                    <strong>${value.toFixed(2)} ${info.unit}</strong>
                   </span>
                 </div>
               `;
@@ -2600,8 +2602,8 @@ class StateGridInfo extends LitElement {
         }
       },
       colors: [
-        colorLastValley, colorLastNormal, colorLastPeak, colorLastTip,
-        colorValley, colorNormal, colorPeak, colorTip, '#f3066080', colorCost
+        colorLastValley,colorLastNormal,colorLastPeak,colorLastTip,
+        colorValley,colorNormal,colorPeak,colorTip,'#f3066080',colorCost
       ],
       stroke: { width: [0, 0, 0, 0, 0, 0, 0, 0, 2, 2], curve: 'smooth' },
       markers: {
@@ -2737,17 +2739,18 @@ class StateGridInfo extends LitElement {
             displayDate = `${originalDate.getFullYear()}-${String(originalDate.getMonth() + 1).padStart(2, '0')}`;
           }
 
+          // series顺序：0上年谷,1上年平,2上年峰,3上年尖,4本年谷,5本年平,6本年峰,7本年尖,8上年电费,9本年电费
           const seriesInfo = [
-            { name: '上年谷', unit: '度', color: colorLastValley },
-            { name: '上年平', unit: '度', color: colorLastNormal },
-            { name: '上年峰', unit: '度', color: colorLastPeak },
-            { name: '上年尖', unit: '度', color: colorLastTip },
-            { name: '本年谷', unit: '度', color: colorValley },
-            { name: '本年平', unit: '度', color: colorNormal },
-            { name: '本年峰', unit: '度', color: colorPeak },
-            { name: '本年尖', unit: '度', color: colorTip },
-            { name: '上年电费', unit: '元', color: '#f3066080' },
-            { name: '本年电费', unit: '度', color: colorCost }
+            { name: '上年尖', unit: '度', color: colorLastTip, seriesIndex: 3 },
+            { name: '上年峰', unit: '度', color: colorLastPeak, seriesIndex: 2 },
+            { name: '上年平', unit: '度', color: colorLastNormal, seriesIndex: 1 },
+            { name: '上年谷', unit: '度', color: colorLastValley, seriesIndex: 0 },
+            { name: '上年电费', unit: '元', color: '#f3066080', seriesIndex: 8 },
+            { name: '本年尖', unit: '度', color: colorTip, seriesIndex: 7 },
+            { name: '本年峰', unit: '度', color: colorPeak, seriesIndex: 6 },
+            { name: '本年平', unit: '度', color: colorNormal, seriesIndex: 5 },
+            { name: '本年谷', unit: '度', color: colorValley, seriesIndex: 4 },
+            { name: '本年电费', unit: '元', color: colorCost, seriesIndex: 9 },
           ];
 
           let tooltipHTML = `
@@ -2766,8 +2769,7 @@ class StateGridInfo extends LitElement {
 
           // 计算本年总用电量 (索引4-7是本年谷、平、峰、尖)
           let currentTotal = 0;
-          const currentIndices = [1, 3, 5, 7];
-          for (const i of currentIndices) {
+          for (let i = 4; i < 8; i++) {
             const value = series[i]?.[dataPointIndex] || 0;
             currentTotal += value;
           }
@@ -2798,15 +2800,17 @@ class StateGridInfo extends LitElement {
             `;
           }
 
-          series.forEach((s, idx) => {
-            const value = s?.[dataPointIndex];
-            if (value !== null && value !== undefined && value !== 0) {
+          // 遍历seriesInfo数组显示数据
+          seriesInfo.forEach((info) => {
+            const value = series[info.seriesIndex]?.[dataPointIndex];
+            // 电费数据总是显示（即使为0），其他数据只在非0时显示
+            if (value !== null && value !== undefined && (value !== 0 || info.unit === '元')) {
               tooltipHTML += `
                 <div style="display: flex;align-items: center;margin: 0;font-size: 12px;border-bottom: 1px dashed #999;">
-                  <span style="display: inline-block;width: 8px;height: 8px;background: ${seriesInfo[idx].color};border-radius: 50%;margin-right: 5px;"></span>
-                  <span style="color: ${seriesInfo[idx].color}">
-                    ${seriesInfo[idx].name}:
-                    <strong>${value.toFixed(2)} ${seriesInfo[idx].unit}</strong>
+                  <span style="display: inline-block;width: 8px;height: 8px;background: ${info.color};border-radius: 50%;margin-right: 5px;"></span>
+                  <span style="color: ${info.color}">
+                    ${info.name}:
+                    <strong>${value.toFixed(2)} ${info.unit}</strong>
                   </span>
                 </div>
               `;

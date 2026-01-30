@@ -58,6 +58,7 @@ CONF_SEGMENT_BEFORE_STANDARD = "segment_before_standard"
 CONF_SEGMENT_AFTER_STANDARD = "segment_after_standard"
 CONF_CONSUMER_NUMBER = "consumer_number"
 CONF_CONSUMER_NUMBER_INDEX = "consumer_number_index"
+CONF_CONSUMER_NAME = "consumer_name"
 
 # 阶梯价格配置
 CONF_LADDER_LEVEL_1 = "ladder_level_1"

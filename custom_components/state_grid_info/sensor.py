@@ -20,7 +20,7 @@ from .const import (
     BILLING_STANDARD_MONTH_阶梯, BILLING_STANDARD_MONTH_阶梯_峰平谷,
     BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格, BILLING_STANDARD_OTHER_平均单价,
     CONF_DATA_SOURCE, CONF_BILLING_STANDARD,
-    CONF_CONSUMER_NUMBER, CONF_CONSUMER_NUMBER_INDEX,
+    CONF_CONSUMER_NUMBER, CONF_CONSUMER_NUMBER_INDEX, CONF_CONSUMER_NAME,
     CONF_MQTT_HOST, CONF_MQTT_PORT, CONF_MQTT_USERNAME, CONF_MQTT_PASSWORD, CONF_STATE_GRID_ID,
     CONF_LADDER_LEVEL_1, CONF_LADDER_LEVEL_2,
     CONF_LADDER_PRICE_1, CONF_LADDER_PRICE_2, CONF_LADDER_PRICE_3,
@@ -386,6 +386,9 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
     def _process_hassbox_data(self, power_user_data):
         """Process HassBox integration data."""
         try:
+            # 获取户名并记录日志
+            consumer_name = power_user_data.get("consName_dst", "")
+
             # 提取文件json日用电数据（大概是最近40天左右）
             daily_bill_list = power_user_data.get("daily_bill_list", [])
             # 重写结构
@@ -474,10 +477,29 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
             
             # 计算每日电费
             dayList = self._calculate_daily_cost(daylist7)
-            
+
+            # 删除尾部的连续全0数据
+            # 从后往前遍历，找到第一个非0的数据项
+            last_non_zero_index = len(dayList) - 1
+            while last_non_zero_index >= 0:
+                item = dayList[last_non_zero_index]
+                # 检查所有数值字段是否都为0
+                if (item.get("dayEleNum", 0) == 0 and
+                    item.get("dayEleCost", 0) == 0 and
+                    item.get("dayTPq", 0) == 0 and
+                    item.get("dayPPq", 0) == 0 and
+                    item.get("dayNPq", 0) == 0 and
+                    item.get("dayVPq", 0) == 0):
+                    last_non_zero_index -= 1
+                else:
+                    break
+            # 只保留到第一个非0数据项
+            if last_non_zero_index < len(dayList) - 1:
+                dayList = dayList[:last_non_zero_index + 1]
+
             # 恢复原始数据
             self.data = original_data
-            
+
             # 重写月用电结构
             monthList = []
             for item in month_bill_list:
@@ -506,6 +528,7 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 "dayList": dayList,
                 "monthList": monthList,
                 "yearList": yearList,
+                "consumer_name": power_user_data.get("consName_dst", ""),
             }
         except Exception as ex:
             _LOGGER.error("Error processing HassBox data: %s", ex)
@@ -1285,13 +1308,27 @@ class StateGridInfoSensor(SensorEntity):
         consumer_number = config.get(CONF_CONSUMER_NUMBER, "")
         self.entity_id = f"sensor.state_grid_{consumer_number}"
         self._attr_unique_id = f"state_grid_{consumer_number}"
-        self._attr_icon = "mdi:flash"        
+        self._attr_icon = "mdi:flash"
+
         self._attr_name = f"国家电网 {consumer_number}"
         self._attr_native_unit_of_measurement = "元"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"state_grid_{consumer_number}")},
-            "name": f"国家电网 {consumer_number}",
+        self._consumer_number = consumer_number
+
+    @property
+    def device_info(self):
+        """Return device info."""
+        # 动态获取户名：优先从数据中获取，如果没有则从配置中获取
+        consumer_name = ""
+        if self.coordinator.data and "consumer_name" in self.coordinator.data:
+            consumer_name = self.coordinator.data.get("consumer_name", "")
+        elif CONF_CONSUMER_NAME in self.config:
+            consumer_name = self.config.get(CONF_CONSUMER_NAME, "")
+
+        return {
+            "identifiers": {(DOMAIN, f"state_grid_{self._consumer_number}")},
+            "name": f"国家电网 {self._consumer_number}",
             "manufacturer": "国家电网",
+            "model": f"户名:{consumer_name}"
         }
         
     @property

@@ -18,7 +18,7 @@ from .const import (
     BILLING_STANDARD_MONTH_阶梯, BILLING_STANDARD_MONTH_阶梯_峰平谷,
     BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格, BILLING_STANDARD_OTHER_平均单价,
     CONF_DATA_SOURCE, CONF_BILLING_STANDARD,
-    CONF_CONSUMER_NUMBER, CONF_CONSUMER_NUMBER_INDEX,
+    CONF_CONSUMER_NUMBER, CONF_CONSUMER_NUMBER_INDEX, CONF_CONSUMER_NAME,
     CONF_MQTT_HOST, CONF_MQTT_PORT, CONF_MQTT_USERNAME, CONF_MQTT_PASSWORD, CONF_STATE_GRID_ID,
     CONF_LADDER_LEVEL_1, CONF_LADDER_LEVEL_2,
     CONF_LADDER_PRICE_1, CONF_LADDER_PRICE_2, CONF_LADDER_PRICE_3,
@@ -100,7 +100,8 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             if "consNo_dst" in user:
                                 self._consumer_numbers.append({
                                     "index": i,
-                                    "number": user["consNo_dst"]
+                                    "number": user["consNo_dst"],
+                                    "name": user.get("consName_dst", "")
                                 })
                 else:
                     errors["base"] = "hassbox_config_not_found"
@@ -113,6 +114,11 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._data[CONF_CONSUMER_NUMBER_INDEX] = next(
                 (item["index"] for item in self._consumer_numbers if item["number"] == user_input[CONF_CONSUMER_NUMBER]),
                 0
+            )
+            # 保存户名
+            self._data[CONF_CONSUMER_NAME] = next(
+                (item["name"] for item in self._consumer_numbers if item["number"] == user_input[CONF_CONSUMER_NUMBER]),
+                ""
             )
             return await self.async_step_billing_standard()
         
@@ -442,7 +448,8 @@ class StateGridInfoOptionsFlowHandler(config_entries.OptionsFlow):
                             if "consNo_dst" in user:
                                 self._consumer_numbers.append({
                                     "index": i,
-                                    "number": user["consNo_dst"]
+                                    "number": user["consNo_dst"],
+                                    "name": user.get("consName_dst", "")
                                 })
                 else:
                     errors["base"] = "hassbox_config_not_found"
@@ -455,6 +462,11 @@ class StateGridInfoOptionsFlowHandler(config_entries.OptionsFlow):
             self._data[CONF_CONSUMER_NUMBER_INDEX] = next(
                 (item["index"] for item in self._consumer_numbers if item["number"] == user_input[CONF_CONSUMER_NUMBER]),
                 0
+            )
+            # 保存户名
+            self._data[CONF_CONSUMER_NAME] = next(
+                (item["name"] for item in self._consumer_numbers if item["number"] == user_input[CONF_CONSUMER_NUMBER]),
+                ""
             )
             return await self.async_step_billing_standard()
         

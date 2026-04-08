@@ -481,7 +481,7 @@ class StateGridStorage:
     async def async_get_runtime_snapshot(self, consumer_number: str) -> dict:
         """构建 coordinator 向实体暴露的运行时快照（UI 裁剪视图）。
 
-        - daylist：最近 30 天，降序
+        - daylist：最近 70 天，降序
         - monthlist：最近 24 个月，降序
         - yearlist：全部年份，降序
         - overview 字段供 Overview Sensor 使用
@@ -494,7 +494,7 @@ class StateGridStorage:
         yearly = account["yearly"]
 
         sorted_days = sorted(daily.values(), key=lambda x: x["day"], reverse=True)
-        daylist = sorted_days[:30]
+        daylist = sorted_days[:70]
 
         sorted_months = sorted(monthly.values(), key=lambda x: x["month"], reverse=True)
         monthlist = sorted_months[:24]

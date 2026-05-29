@@ -28,6 +28,7 @@ from .const import (
     CONF_PRICE_PEAK, CONF_PRICE_FLAT, CONF_PRICE_VALLEY, CONF_PRICE_TIP,
     CONF_MONTH_PRICES, CONF_AVERAGE_PRICE, CONF_IS_PREPAID,
 )
+from .storage import StateGridStorage
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,9 +64,15 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(minutes=10),  # 每10分钟自动更新
         )
         self.config = config
-        self.data = None
         self.mqtt_client = None
         self.last_update_time = datetime.now()
+        
+        # 初始化持久化存储
+        consumer_number = config.get(CONF_CONSUMER_NUMBER, "default")
+        self._storage = StateGridStorage(hass, consumer_number)
+        # 从持久化存储加载初始数据
+        self.data = dict(self._storage.data) if self._storage.data.get("dayList") else None
+        
         self._setup_data_source()
 
     def _setup_data_source(self):
@@ -164,8 +171,13 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
             payload = json.loads(msg.payload.decode())
             processed_data = self._process_qinglong_data(payload)
             
-            # 更新数据和时间戳
-            self.data = processed_data
+            # 先更新到持久化存储，再读取到HA
+            if processed_data:
+                merged_data = self._storage.update(processed_data)
+                self.data = merged_data
+            else:
+                self.data = processed_data
+            
             self.last_update_time = receive_time
             
             # 通知协调器数据已更新
@@ -225,9 +237,20 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
                 if isinstance(hassbox_data, dict):
                     hassbox_data["data_expired"] = False
                 
-                # 更新 self.data
-                self.data = hassbox_data  
-                return hassbox_data
+                # 先更新到持久化存储，再读取到HA
+                if hassbox_data:
+                    merged_data = await self.hass.async_add_executor_job(
+                        self._storage.update, hassbox_data
+                    )
+                    self.data = merged_data
+                else:
+                    # 新数据为空时，使用持久化存储中的历史数据
+                    if self._storage.data.get("dayList"):
+                        self.data = dict(self._storage.data)
+                    else:
+                        self.data = hassbox_data
+                
+                return self.data
 
             elif self.config.get(CONF_DATA_SOURCE) == DATA_SOURCE_QINGLONG:
                 # 对于MQTT，检查连接状态并尝试重新连接

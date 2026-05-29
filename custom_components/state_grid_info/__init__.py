@@ -8,7 +8,7 @@ from homeassistant.const import Platform
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.frontend import add_extra_js_url
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_CONSUMER_NUMBER
 
 _LOGGER = logging.getLogger(__name__)
 

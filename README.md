@@ -1,4 +1,5 @@
 ## 安装步骤
+### 数据持久化存储在state_grid_info_xxxxxxxx.json文件
 
 ### 方法一：通过 HACS 安装（推荐）
 1. 确保已安装 [HACS](https://hacs.xyz/)。

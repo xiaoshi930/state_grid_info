@@ -596,7 +596,8 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
             
             # 计算每日电费
             dayList = self._calculate_daily_cost(dayList7)
-            
+            dayList.reverse()  # 改为最新日期在前
+
             # 恢复原始数据
             self.data = original_data
             

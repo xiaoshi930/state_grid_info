@@ -1,4 +1,4 @@
-console.info("%c 消逝卡-电费卡 \n%c        v 3.7 ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
+console.info("%c 消逝卡-电费卡 \n%c        v 3.8 ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 
 class StateGridPhoneEditor extends LitElement {
@@ -1445,8 +1445,8 @@ class StateGridInfo extends LitElement {
       
       .usage-cost {
         position: absolute;
-        left: 50%;
-        text-align: left;
+        right: 0;
+        text-align: right;
       }
       
       .usage-bar {
@@ -1907,37 +1907,239 @@ class StateGridInfo extends LitElement {
     const selectedEntity = this.hass.states[selectedEntityId];
 
     if (!selectedEntity?.attributes?.daylist) return null;
-    const daylist = selectedEntity.attributes.daylist.slice(0, 30);
-    const currentDay = daylist[0] || {};
+    const daylist = selectedEntity.attributes.daylist;
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-based
+    const currentDay = now.getDate();
+    const daysInCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+    // 构建本月数据映射 day => item，同时找到本月最后有数据的日期
+    const currentMonthMap = {};
+    let lastDataDay = 0;
+    daylist.forEach(item => {
+      if (!item?.day) return;
+      const d = new Date(item.day.split(' ')[0]);
+      if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
+        currentMonthMap[d.getDate()] = item;
+        if (d.getDate() > lastDataDay) lastDataDay = d.getDate();
+      }
+    });
+    // 如果没有本月数据，回退到当前日期
+    if (lastDataDay === 0) lastDataDay = currentDay;
+
+    // 构建上月数据映射 day => item
+    const lastMonthMap = {};
+    daylist.forEach(item => {
+      if (!item?.day) return;
+      const d = new Date(item.day.split(' ')[0]);
+      if (d.getFullYear() === currentYear && d.getMonth() === currentMonth - 1) {
+        lastMonthMap[d.getDate()] = item;
+      }
+      // 处理1月时上年是12月的情况
+      if (currentMonth === 0 && d.getFullYear() === currentYear - 1 && d.getMonth() === 11) {
+        lastMonthMap[d.getDate()] = item;
+      }
+    });
+
+    // 上月天数，用于处理上月不足天数时的回退
+    const lastMonthDays = new Date(currentYear, currentMonth, 0).getDate();
+
+    // 计算本月已过天数中，与上月同期各指标的日平均差值
+    let curTipSum = 0, curPeakSum = 0, curNormalSum = 0, curValleySum = 0, curCostSum = 0;
+    let lastTipSum = 0, lastPeakSum = 0, lastNormalSum = 0, lastValleySum = 0, lastCostSum = 0;
+    let comparedDays = 0;
+    for (let d = 1; d <= lastDataDay; d++) {
+      const curItem = currentMonthMap[d];
+      const lastItem = lastMonthMap[d];
+      if (curItem) {
+        curTipSum += Number(curItem.dayTPq) || 0;
+        curPeakSum += Number(curItem.dayPPq) || 0;
+        curNormalSum += Number(curItem.dayNPq) || 0;
+        curValleySum += Number(curItem.dayVPq) || 0;
+        curCostSum += Number(curItem.dayEleCost) || 0;
+        if (lastItem) {
+          lastTipSum += Number(lastItem.dayTPq) || 0;
+          lastPeakSum += Number(lastItem.dayPPq) || 0;
+          lastNormalSum += Number(lastItem.dayNPq) || 0;
+          lastValleySum += Number(lastItem.dayVPq) || 0;
+          lastCostSum += Number(lastItem.dayEleCost) || 0;
+        }
+        comparedDays++;
+      }
+    }
+    const avgDiffTip = comparedDays > 0 ? (curTipSum - lastTipSum) / comparedDays : 0;
+    const avgDiffPeak = comparedDays > 0 ? (curPeakSum - lastPeakSum) / comparedDays : 0;
+    const avgDiffNormal = comparedDays > 0 ? (curNormalSum - lastNormalSum) / comparedDays : 0;
+    const avgDiffValley = comparedDays > 0 ? (curValleySum - lastValleySum) / comparedDays : 0;
+    const avgDiffCost = comparedDays > 0 ? (curCostSum - lastCostSum) / comparedDays : 0;
+
+    // 按1-31天生成数据，优先本月，无则用上月
+    const categories = [];
+    const tipData = [], peakData = [], normalData = [], valleyData = [], costData = [];
+    const tipIsLast = [], peakIsLast = [], normalIsLast = [], valleyIsLast = [], costIsLast = [];
+    const tipIsEstimate = [], peakIsEstimate = [], normalIsEstimate = [], valleyIsEstimate = [], costIsEstimate = [];
+
+    for (let day = 1; day <= daysInCurrentMonth; day++) {
+      categories.push(day);
+      const curItem = currentMonthMap[day];
+      const lastItem = lastMonthMap[day];
+      // 上月不足天数时，用当前月（上月之后的月）对应日期回退
+      const overflowDay = day > lastMonthDays ? day - lastMonthDays : null;
+      const overflowItem = overflowDay !== null ? currentMonthMap[overflowDay] : null;
+      const isFuture = day > lastDataDay;
+
+      // 尖
+      if (curItem && day <= lastDataDay) {
+        tipData.push(Number(curItem.dayTPq) || 0);
+        tipIsLast.push(false);
+        tipIsEstimate.push(false);
+      } else if (isFuture && lastItem) {
+        tipData.push(Math.max(0, (Number(lastItem.dayTPq) || 0) + avgDiffTip));
+        tipIsLast.push(true);
+        tipIsEstimate.push(true);
+      } else if (isFuture && overflowItem) {
+        tipData.push(Math.max(0, (Number(overflowItem.dayTPq) || 0) + avgDiffTip));
+        tipIsLast.push(true);
+        tipIsEstimate.push(true);
+      } else if (lastItem) {
+        tipData.push(Number(lastItem.dayTPq) || 0);
+        tipIsLast.push(true);
+        tipIsEstimate.push(false);
+      } else if (overflowItem) {
+        tipData.push(Number(overflowItem.dayTPq) || 0);
+        tipIsLast.push(true);
+        tipIsEstimate.push(false);
+      } else {
+        tipData.push(0);
+        tipIsLast.push(false);
+        tipIsEstimate.push(false);
+      }
+
+      // 峰
+      if (curItem && day <= lastDataDay) {
+        peakData.push(Number(curItem.dayPPq) || 0);
+        peakIsLast.push(false);
+        peakIsEstimate.push(false);
+      } else if (isFuture && lastItem) {
+        peakData.push(Math.max(0, (Number(lastItem.dayPPq) || 0) + avgDiffPeak));
+        peakIsLast.push(true);
+        peakIsEstimate.push(true);
+      } else if (isFuture && overflowItem) {
+        peakData.push(Math.max(0, (Number(overflowItem.dayPPq) || 0) + avgDiffPeak));
+        peakIsLast.push(true);
+        peakIsEstimate.push(true);
+      } else if (lastItem) {
+        peakData.push(Number(lastItem.dayPPq) || 0);
+        peakIsLast.push(true);
+        peakIsEstimate.push(false);
+      } else if (overflowItem) {
+        peakData.push(Number(overflowItem.dayPPq) || 0);
+        peakIsLast.push(true);
+        peakIsEstimate.push(false);
+      } else {
+        peakData.push(0);
+        peakIsLast.push(false);
+        peakIsEstimate.push(false);
+      }
+
+      // 平
+      if (curItem && day <= lastDataDay) {
+        normalData.push(Number(curItem.dayNPq) || 0);
+        normalIsLast.push(false);
+        normalIsEstimate.push(false);
+      } else if (isFuture && lastItem) {
+        normalData.push(Math.max(0, (Number(lastItem.dayNPq) || 0) + avgDiffNormal));
+        normalIsLast.push(true);
+        normalIsEstimate.push(true);
+      } else if (isFuture && overflowItem) {
+        normalData.push(Math.max(0, (Number(overflowItem.dayNPq) || 0) + avgDiffNormal));
+        normalIsLast.push(true);
+        normalIsEstimate.push(true);
+      } else if (lastItem) {
+        normalData.push(Number(lastItem.dayNPq) || 0);
+        normalIsLast.push(true);
+        normalIsEstimate.push(false);
+      } else if (overflowItem) {
+        normalData.push(Number(overflowItem.dayNPq) || 0);
+        normalIsLast.push(true);
+        normalIsEstimate.push(false);
+      } else {
+        normalData.push(0);
+        normalIsLast.push(false);
+        normalIsEstimate.push(false);
+      }
+
+      // 谷
+      if (curItem && day <= lastDataDay) {
+        valleyData.push(Number(curItem.dayVPq) || 0);
+        valleyIsLast.push(false);
+        valleyIsEstimate.push(false);
+      } else if (isFuture && lastItem) {
+        valleyData.push(Math.max(0, (Number(lastItem.dayVPq) || 0) + avgDiffValley));
+        valleyIsLast.push(true);
+        valleyIsEstimate.push(true);
+      } else if (isFuture && overflowItem) {
+        valleyData.push(Math.max(0, (Number(overflowItem.dayVPq) || 0) + avgDiffValley));
+        valleyIsLast.push(true);
+        valleyIsEstimate.push(true);
+      } else if (lastItem) {
+        valleyData.push(Number(lastItem.dayVPq) || 0);
+        valleyIsLast.push(true);
+        valleyIsEstimate.push(false);
+      } else if (overflowItem) {
+        valleyData.push(Number(overflowItem.dayVPq) || 0);
+        valleyIsLast.push(true);
+        valleyIsEstimate.push(false);
+      } else {
+        valleyData.push(0);
+        valleyIsLast.push(false);
+        valleyIsEstimate.push(false);
+      }
+
+      // 电费
+      if (curItem && day <= lastDataDay) {
+        costData.push(Number(curItem.dayEleCost) || 0);
+        costIsLast.push(false);
+        costIsEstimate.push(false);
+      } else if (isFuture && lastItem) {
+        costData.push(Math.max(0, (Number(lastItem.dayEleCost) || 0) + avgDiffCost));
+        costIsLast.push(true);
+        costIsEstimate.push(true);
+      } else if (isFuture && overflowItem) {
+        costData.push(Math.max(0, (Number(overflowItem.dayEleCost) || 0) + avgDiffCost));
+        costIsLast.push(true);
+        costIsEstimate.push(true);
+      } else if (lastItem) {
+        costData.push(Number(lastItem.dayEleCost) || 0);
+        costIsLast.push(true);
+        costIsEstimate.push(false);
+      } else if (overflowItem) {
+        costData.push(Number(overflowItem.dayEleCost) || 0);
+        costIsLast.push(true);
+        costIsEstimate.push(false);
+      } else {
+        costData.push(0);
+        costIsLast.push(false);
+        costIsEstimate.push(false);
+      }
+    }
+
+    // 本月当前日期数据（优先取本月今天，否则取daylist最新一条）
+    const currentDayItem = currentMonthMap[currentDay] || daylist[0] || {};
+
     return {
-      tip: daylist.map(item => ({
-        x: new Date(item.day.split(' ')[0]).getTime(),
-        y: Number(item.dayTPq) || 0
-      })),
-      peak: daylist.map(item => ({
-        x: new Date(item.day.split(' ')[0]).getTime(),
-        y: Number(item.dayPPq) || 0
-      })),
-      normal: daylist.map(item => ({
-        x: new Date(item.day.split(' ')[0]).getTime(),
-        y: Number(item.dayNPq) || 0
-      })),
-      valley: daylist.map(item => ({
-        x: new Date(item.day.split(' ')[0]).getTime(),
-        y: Number(item.dayVPq) || 0
-      })),
-      total: daylist.map(item => ({
-        x: new Date(item.day.split(' ')[0]).getTime(),
-        y: (Number(item.dayTPq) || 0) + (Number(item.dayPPq) || 0) + (Number(item.dayNPq) || 0) + (Number(item.dayVPq) || 0)
-      })),
-      cost: daylist.map(item => ({
-        x: new Date(item.day.split(' ')[0]).getTime(),
-        y: Number(item.dayEleCost) || 0
-      })),
+      categories,
+      tip: tipData, peak: peakData, normal: normalData, valley: valleyData, cost: costData,
+      tipIsLast, peakIsLast, normalIsLast, valleyIsLast, costIsLast,
+      tipIsEstimate, peakIsEstimate, normalIsEstimate, valleyIsEstimate, costIsEstimate,
+      total: tipData.map((v, i) => v + peakData[i] + normalData[i] + valleyData[i]),
+      lastDataDay,
       current: {
-        ele: currentDay.dayEleNum || 0,
-        cost: currentDay.dayEleCost || 0,
-        days: daylist.length
+        ele: Number(currentDayItem.dayEleNum) || 0,
+        cost: Number(currentDayItem.dayEleCost) || 0,
+        days: currentDay
       }
     };
   }
@@ -1954,56 +2156,75 @@ class StateGridInfo extends LitElement {
     const currentYear = new Date().getFullYear().toString();
 
     if (!selectedEntity?.attributes?.monthlist) return null;
-
-    // 构建12个月的数据（1月-12月），无数据的月份填0
+    // 确保数据安全，处理可能为空的情况
     const lastYearBills = selectedEntity.attributes.monthlist.filter(item =>
       item?.month && item.month.startsWith(lastYear)
     ) || [];
     const thisYearBills = selectedEntity.attributes.monthlist.filter(item =>
       item?.month && item.month.startsWith(currentYear)
     ) || [];
-
-    // 按月建立查找表
-    const lastYearMap = {};
-    lastYearBills.forEach(item => {
-      const m = parseInt(item.month.split("-")[1], 10);
-      lastYearMap[m] = item;
-    });
-    const thisYearMap = {};
-    thisYearBills.forEach(item => {
-      const m = parseInt(item.month.split("-")[1], 10);
-      thisYearMap[m] = item;
-    });
-
-    // 本年最新月数据
-    const currentMonth = new Date().getMonth() + 1;
-    const monthlistDay = thisYearMap[currentMonth] || thisYearBills[thisYearBills.length - 1] || null;
-    const lastmonthlistDay = lastYearMap[currentMonth] || lastYearBills[lastYearBills.length - 1] || null;
-
-    // 生成1-12月数据
-    const months = Array.from({length: 12}, (_, i) => i + 1);
+    const lastmonthlist = [...lastYearBills ].slice(0, 12).reverse();
+    const monthlist = [...thisYearBills].slice(0, 12).reverse();
+    const lastmonthlistDay = [...lastYearBills ][0];
+    const monthlistDay = [...thisYearBills][0];
     return {
-      tip: months.map(m => Number(thisYearMap[m]?.monthTPq) || 0),
-      peak: months.map(m => Number(thisYearMap[m]?.monthPPq) || 0),
-      normal: months.map(m => Number(thisYearMap[m]?.monthNPq) || 0),
-      valley: months.map(m => Number(thisYearMap[m]?.monthVPq) || 0),
-      total: months.map(m => (Number(thisYearMap[m]?.monthTPq) || 0) + (Number(thisYearMap[m]?.monthPPq) || 0) + (Number(thisYearMap[m]?.monthNPq) || 0) + (Number(thisYearMap[m]?.monthVPq) || 0)),
-      cost: months.map(m => Number(thisYearMap[m]?.monthEleCost) || 0),
+      tip: monthlist.map(item => ({
+        x: new Date(item.month.substr(0,7)+'-01').getTime(),
+        y: Number(item.monthTPq) || 0
+      })),
+      peak: monthlist.map(item => ({
+        x: new Date(item.month.substr(0,7)+'-01').getTime(),
+        y: Number(item.monthPPq) || 0
+      })),
+      normal: monthlist.map(item => ({
+        x: new Date(item.month.substr(0,7)+'-01').getTime(),
+        y: Number(item.monthNPq) || 0
+      })),
+      valley: monthlist.map(item => ({
+        x: new Date(item.month.substr(0,7)+'-01').getTime(),
+        y: Number(item.monthVPq) || 0
+      })),
+      total: monthlist.map(item => ({
+        x: new Date(item.month.substr(0,7)+'-01').getTime(),
+        y: (Number(item.monthTPq) || 0) + (Number(item.monthPPq) || 0) + (Number(item.monthNPq) || 0) + (Number(item.monthVPq) || 0)
+      })),
+      cost: monthlist.map(item => ({
+        x: new Date(item.month.substr(0,7)+'-01').getTime(),
+        y: Number(item.monthEleCost) || 0
+      })),
       current: {
         ele: monthlistDay?.monthEleNum || 0,
         cost: monthlistDay?.monthEleCost || 0,
-        days: thisYearBills.length
+        days: monthlist.length
       },
-      lasttip: months.map(m => Number(lastYearMap[m]?.monthTPq) || 0),
-      lastpeak: months.map(m => Number(lastYearMap[m]?.monthPPq) || 0),
-      lastnormal: months.map(m => Number(lastYearMap[m]?.monthNPq) || 0),
-      lastvalley: months.map(m => Number(lastYearMap[m]?.monthVPq) || 0),
-      lasttotal: months.map(m => (Number(lastYearMap[m]?.monthTPq) || 0) + (Number(lastYearMap[m]?.monthPPq) || 0) + (Number(lastYearMap[m]?.monthNPq) || 0) + (Number(lastYearMap[m]?.monthVPq) || 0)),
-      lastcost: months.map(m => Number(lastYearMap[m]?.monthEleCost) || 0),
+      lasttip: lastmonthlist.map(item => ({
+        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
+        y: Number(item.monthTPq) || 0
+      })),
+      lastpeak: lastmonthlist.map(item => ({
+        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
+        y: Number(item.monthPPq) || 0
+      })),
+      lastnormal: lastmonthlist.map(item => ({
+        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
+        y: Number(item.monthNPq) || 0
+      })),
+      lastvalley: lastmonthlist.map(item => ({
+        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
+        y: Number(item.monthVPq) || 0
+      })),
+      lasttotal: lastmonthlist.map(item => ({
+        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
+        y: (Number(item.monthTPq) || 0) + (Number(item.monthPPq) || 0) + (Number(item.monthNPq) || 0) + (Number(item.monthVPq) || 0)
+      })),
+      lastcost: lastmonthlist.map(item => ({
+        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
+        y: Number(item.monthEleCost) || 0
+      })),
       lastcurrent: {
         ele: lastmonthlistDay?.monthEleNum || 0,
         cost: lastmonthlistDay?.monthEleCost || 0,
-        days: lastYearBills.length
+        days: lastmonthlist.length
       }
     };
   }
@@ -2142,9 +2363,8 @@ class StateGridInfo extends LitElement {
     const BgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
 
     // 计算总用电量的最大值
-    const totalValues = data.total.map(item => item.y);
-    const maxTotal = totalValues.length > 0 ? Math.max(...totalValues) : 0;
-    const maxTotalPoint = data.total.find(item => item.y === maxTotal);
+    const maxTotal = data.total.length > 0 ? Math.max(...data.total) : 0;
+    const maxTotalIndex = data.total.indexOf(maxTotal);
 
     const colorCost = this.colorCost;
     const colorNum = this.colorNum;
@@ -2155,31 +2375,65 @@ class StateGridInfo extends LitElement {
     const colorNormal = '#4CAF50';  // 平 - 绿色
     const colorValley = '#00BCD4';  // 谷 - 青色
 
+    // 上月颜色（带透明度）
+    const colorLastTip = '#FF525240';
+    const colorLastPeak = '#FF980040';
+    const colorLastNormal = '#4CAF5040';
+    const colorLastValley = '#00BCD440';
+    const colorLastCost = this.colorCost + '40';
+
+    // 为每个柱子生成带颜色的数据：上月数据用透明色
+    const valleySeriesData = data.valley.map((y, i) => ({
+      x: data.categories[i],
+      y: y,
+      fillColor: data.valleyIsLast[i] ? colorLastValley : colorValley
+    }));
+    const normalSeriesData = data.normal.map((y, i) => ({
+      x: data.categories[i],
+      y: y,
+      fillColor: data.normalIsLast[i] ? colorLastNormal : colorNormal
+    }));
+    const peakSeriesData = data.peak.map((y, i) => ({
+      x: data.categories[i],
+      y: y,
+      fillColor: data.peakIsLast[i] ? colorLastPeak : colorPeak
+    }));
+    const tipSeriesData = data.tip.map((y, i) => ({
+      x: data.categories[i],
+      y: y,
+      fillColor: data.tipIsLast[i] ? colorLastTip : colorTip
+    }));
+    const costSeriesData = data.cost.map((y, i) => ({
+      x: data.categories[i],
+      y: y,
+      fillColor: data.costIsLast[i] ? colorLastCost : colorCost
+    }));
+
     return {
       series: [
         {
           name: '谷时段',
-          data: data.valley,
+          data: valleySeriesData,
           type: 'column'
         },
         {
           name: '平时段',
-          data: data.normal,
+          data: normalSeriesData,
           type: 'column'
         },
         {
           name: '峰时段',
-          data: data.peak,
+          data: peakSeriesData,
           type: 'column'
         },
         {
           name: '尖时段',
-          data: data.tip,
+          data: tipSeriesData,
           type: 'column'
         },
         {
           name: '日电费',
-          data: data.cost,
+          data: costSeriesData,
           type: 'line',
           color: colorCost
         }
@@ -2207,7 +2461,7 @@ class StateGridInfo extends LitElement {
         bar: {
           horizontal: false,
           borderRadius: 0,
-          columnWidth: '30%',
+          columnWidth: '60%',
           barHeight: '70%',
           distributed: false,
           stacking: 'normal',
@@ -2234,7 +2488,6 @@ class StateGridInfo extends LitElement {
           }
         }
       },
-      colors: [colorValley, colorNormal, colorPeak, colorTip, colorCost],
       stroke: { width: [0, 0, 0, 0, 2], curve: 'smooth' },
       markers: {
         size: 3,
@@ -2246,17 +2499,19 @@ class StateGridInfo extends LitElement {
         enabled: false
       },
       xaxis: {
-        type: 'datetime',
+        type: 'category',
+        tickAmount: data.categories.length - 1,
         labels: {
-          datetimeFormatter: {
-            day: 'MM-dd',
-            month: 'MM-dd',
-            year: 'MM-dd'
-          },
+          rotate: 0,
           style: {
             fontSize: '10px',
           },
-          hideOverlappingLabels: true
+          hideOverlappingLabels: true,
+          showDuplicates: false,
+          formatter: function(val) {
+            const day = parseInt(val);
+            return day % 2 === 1 ? String(day) : '';
+          }
         },
         tooltip: {
           enabled: false
@@ -2264,6 +2519,7 @@ class StateGridInfo extends LitElement {
       },
       yaxis: {
         min: 0,
+        max: maxTotal > 0 ? Math.ceil(maxTotal * 1.15 / 5) * 5 : undefined,
         floating: false,
         labels: {
           minWidth: 5,
@@ -2296,10 +2552,10 @@ class StateGridInfo extends LitElement {
           const points = [];
 
           // 标记最大用电量
-          if (maxTotalPoint) {
+          if (maxTotalIndex >= 0 && maxTotal > 0) {
             points.push({
-              x: maxTotalPoint.x,
-              y: maxTotalPoint.y,
+              x: maxTotalIndex,
+              y: maxTotal,
               seriesIndex: 3,
               marker: {
                 size: 0
@@ -2319,8 +2575,8 @@ class StateGridInfo extends LitElement {
             });
 
             points.push({
-              x: maxTotalPoint.x,
-              y: maxTotalPoint.y,
+              x: maxTotalIndex,
+              y: maxTotal,
               seriesIndex: 3,
               marker: {
                 size: 4,
@@ -2350,25 +2606,24 @@ class StateGridInfo extends LitElement {
       tooltip: {
         shared: true,
         intersect: false,
-        custom: function({ series, seriesIndex, dataPointIndex, w }) {
-          // 使用鼠标悬停位置对应的x值
-          const hoverX = w.globals.seriesX[seriesIndex]?.[dataPointIndex];
-          const currentDate = new Date(hoverX);
-          const formattedDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+        custom: function({ series, dataPointIndex }) {
+          // 类别轴，dataPointIndex对应1-31
+          const day = dataPointIndex + 1;
+          const now = new Date();
+          const currentMonth = now.getMonth() + 1;
+          const currentDay = now.getDate();
+          const currentYear = now.getFullYear();
+          // 判断该天是否为预计数据（超过数据最后一天一律为预计）
+          const isEstimate = day > data.lastDataDay;
+          const isLastMonthData = false; // 预计数据不再标记为上月
 
-          // 日图表series顺序：0谷时段,1平时段,2峰时段,3尖时段,4日电费
-          const seriesInfo = [
-            { name: '尖时段', unit: '度', color: colorTip, seriesIndex: 3 },
-            { name: '峰时段', unit: '度', color: colorPeak, seriesIndex: 2 },
-            { name: '平时段', unit: '度', color: colorNormal, seriesIndex: 1 },
-            { name: '谷时段', unit: '度', color: colorValley, seriesIndex: 0 },
-            { name: '日电费', unit: '元', color: colorCost, seriesIndex: 4 }
-          ];
+          const formattedDate = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const dateLabel = isEstimate ? `${formattedDate} 预计` : formattedDate;
 
           let tooltipHTML = `
             <div style="background: ${BgColor};color: ${Color};padding: 8px;border-radius: 4px;border: 1px solid ${Color};">
               <div style="font-weight: bold; font-size: 12px;color: ${Color};  border-bottom: 1px dashed #999;">
-                ${formattedDate}
+                ${dateLabel}
               </div>
           `;
 
@@ -2383,7 +2638,7 @@ class StateGridInfo extends LitElement {
           if (totalElectricity > 0) {
             tooltipHTML += `
               <div style="display: flex;align-items: center;margin: 0;font-size: 12px;border-bottom: 1px dashed #999;font-weight: bold;">
-                <span style="display: inline-block;width: 8px;height: 8px;background: ${colorNum};border-radius: 50%;margin-right: 5px;"></span>
+                <span style="display: inline-block;width: 8px;height: 8px;background: ${isLastMonthData ? colorLastValley : colorNum};border-radius: 50%;margin-right: 5px;"></span>
                 <span style="color: ${Color}">
                   总用电量:
                   <strong>${totalElectricity.toFixed(2)} 度</strong>
@@ -2392,10 +2647,17 @@ class StateGridInfo extends LitElement {
             `;
           }
 
-          // 遍历seriesInfo数组显示数据
-          seriesInfo.forEach((info) => {
-            const value = series[info.seriesIndex]?.[dataPointIndex];
-            // 电费数据总是显示（即使为0），其他数据只在非0时显示
+          // 遍历显示各系列数据
+          const allInfo = [
+            { name: '尖时段', unit: '度', color: isLastMonthData ? colorLastTip : colorTip, idx: 3 },
+            { name: '峰时段', unit: '度', color: isLastMonthData ? colorLastPeak : colorPeak, idx: 2 },
+            { name: '平时段', unit: '度', color: isLastMonthData ? colorLastNormal : colorNormal, idx: 1 },
+            { name: '谷时段', unit: '度', color: isLastMonthData ? colorLastValley : colorValley, idx: 0 },
+            { name: '日电费', unit: '元', color: isLastMonthData ? colorLastCost : colorCost, idx: 4 }
+          ];
+
+          allInfo.forEach((info) => {
+            const value = series[info.idx]?.[dataPointIndex];
             if (value !== null && value !== undefined && (value !== 0 || info.unit === '元')) {
               tooltipHTML += `
                 <div style="display: flex;align-items: center;margin: 0;font-size: 12px;border-bottom: 1px dashed #999;">
@@ -2415,8 +2677,13 @@ class StateGridInfo extends LitElement {
       },
       legend: {
         position: 'bottom',
-        formatter: function(seriesName) {
-          return seriesName;
+        showForNullSeries: false,
+        showForZeroSeries: false,
+        formatter: function(seriesName, opts) {
+          // 如果该系列所有数据都为0或空，不显示
+          const seriesData = opts.w.globals.series[opts.seriesIndex];
+          const hasData = seriesData && seriesData.some(val => val !== 0 && val !== null && val !== undefined);
+          return hasData ? seriesName : '';
         },
         markers: {
           width: 10,
@@ -2441,10 +2708,25 @@ class StateGridInfo extends LitElement {
     const Color = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
     const BgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
     
-    // 计算总用电量的最大值
-    const totalValues = data.total;
+    // 计算本年总用电量的最大值
+    const totalValues = data.total.map(item => item.y);
     const maxTotal = totalValues.length > 0 ? Math.max(...totalValues) : 0;
-    const maxTotalIndex = totalValues.indexOf(maxTotal);
+    const maxTotalPoint = data.total.find(item => item.y === maxTotal);
+
+    // 计算本年电费最大值
+    const costValues = data.cost.map(item => item.y);
+    const maxCost = costValues.length > 0 ? Math.max(...costValues) : 0;
+
+    // 计算上年总用电量的最大值
+    const lasttotalValues = data.lasttotal.map(item => item.y);
+    const maxLastTotal = lasttotalValues.length > 0 ? Math.max(...lasttotalValues) : 0;
+
+    // 计算上年电费最大值
+    const lastcostValues = data.lastcost.map(item => item.y);
+    const maxLastCost = lastcostValues.length > 0 ? Math.max(...lastcostValues) : 0;
+
+    // Y轴最大值取本年、上年电量和电费的较大值
+    const yAxisMax = Math.max(maxTotal, maxCost, maxLastTotal, maxLastCost);
 
     const colorCost = this.colorCost;
     const colorNum = this.colorNum;
@@ -2456,72 +2738,42 @@ class StateGridInfo extends LitElement {
     const colorValley = '#00BCD4';  // 谷 - 青色
 
     // 上年颜色（带透明度）
-    const colorLastTip = '#FF525280';
-    const colorLastPeak = '#FF980080';
-    const colorLastNormal = '#4CAF5080';
-    const colorLastValley = '#00BCD480';
+    const colorLastTip = '#FF525240';
+    const colorLastPeak = '#FF980040';
+    const colorLastNormal = '#4CAF5040';
+    const colorLastValley = '#00BCD440';
 
-    const monthLabels = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+    // 修改数据结构：为上年数据偏移时间，实现并列显示
+    // 使用较大的偏移量来区分上年和本年
+    const offsetMs = 12 * 24 * 60 * 60 * 1000; // 12天的偏移，确保两组数据清晰分开
+
+    const lasttipOffset = data.lasttip.map(item => ({ x: item.x - offsetMs, y: item.y }));
+    const lastpeakOffset = data.lastpeak.map(item => ({ x: item.x - offsetMs, y: item.y }));
+    const lastnormalOffset = data.lastnormal.map(item => ({ x: item.x - offsetMs, y: item.y }));
+    const lastvalleyOffset = data.lastvalley.map(item => ({ x: item.x - offsetMs, y: item.y }));
+    const lastcostOffset = data.lastcost.map(item => ({ x: item.x - offsetMs, y: item.y }));
+
+    // 动态构建series，只包含有数据的系列
+    const hasDataInSeries = (arr) => arr && arr.some(item => item.y > 0);
+    const seriesList = [];
+    
+    if (hasDataInSeries(lastvalleyOffset)) seriesList.push({ name: '上年谷', data: lastvalleyOffset, type: 'column' });
+    if (hasDataInSeries(lastnormalOffset)) seriesList.push({ name: '上年平', data: lastnormalOffset, type: 'column' });
+    if (hasDataInSeries(lastpeakOffset)) seriesList.push({ name: '上年峰', data: lastpeakOffset, type: 'column' });
+    if (hasDataInSeries(lasttipOffset)) seriesList.push({ name: '上年尖', data: lasttipOffset, type: 'column' });
+    if (hasDataInSeries(data.valley)) seriesList.push({ name: '本年谷', data: data.valley, type: 'column' });
+    if (hasDataInSeries(data.normal)) seriesList.push({ name: '本年平', data: data.normal, type: 'column' });
+    if (hasDataInSeries(data.peak)) seriesList.push({ name: '本年峰', data: data.peak, type: 'column' });
+    if (hasDataInSeries(data.tip)) seriesList.push({ name: '本年尖', data: data.tip, type: 'column' });
+    if (hasDataInSeries(lastcostOffset)) seriesList.push({ name: '上年电费', data: lastcostOffset, type: 'line', color: '#f3066040' });
+    if (hasDataInSeries(data.cost)) seriesList.push({ name: '本年电费', data: data.cost, type: 'line', color: colorCost });
 
     return {
-      series: [
-        {
-          name: '上年谷',
-          data: data.lastvalley,
-          type: 'column'
-        },
-        {
-          name: '上年平',
-          data: data.lastnormal,
-          type: 'column'
-        },
-        {
-          name: '上年峰',
-          data: data.lastpeak,
-          type: 'column'
-        },
-        {
-          name: '上年尖',
-          data: data.lasttip,
-          type: 'column'
-        },
-        {
-          name: '本年谷',
-          data: data.valley,
-          type: 'column'
-        },
-        {
-          name: '本年平',
-          data: data.normal,
-          type: 'column'
-        },
-        {
-          name: '本年峰',
-          data: data.peak,
-          type: 'column'
-        },
-        {
-          name: '本年尖',
-          data: data.tip,
-          type: 'column'
-        },
-        {
-          name: '上年电费',
-          data: data.lastcost,
-          type: 'line',
-          color: '#f3066080'
-        },
-        {
-          name: '本年电费',
-          data: data.cost,
-          type: 'line',
-          color: colorCost
-        }
-      ],      
+      series: seriesList,      
       markers: {
         size: 3,
         strokeWidth: 1,
-        colors: ['#f3066080', colorCost],
+        colors: ['#f3066040', colorCost],
         strokeColors: "#fff"
       },
       chart: {
@@ -2574,23 +2826,35 @@ class StateGridInfo extends LitElement {
           }
         }
       },
-      colors: [
-        colorLastValley,colorLastNormal,colorLastPeak,colorLastTip,
-        colorValley,colorNormal,colorPeak,colorTip,'#f3066080',colorCost
-      ],
-      stroke: { width: [0, 0, 0, 0, 0, 0, 0, 0, 2, 2], curve: 'smooth' },
+      colors: seriesList.map(s => {
+        const colorMap = {
+          '上年谷': colorLastValley, '上年平': colorLastNormal, '上年峰': colorLastPeak, '上年尖': colorLastTip,
+          '本年谷': colorValley, '本年平': colorNormal, '本年峰': colorPeak, '本年尖': colorTip,
+          '上年电费': '#f3066040', '本年电费': colorCost
+        };
+        return colorMap[s.name] || s.color || '#999';
+      }),
+      stroke: { width: seriesList.map(s => s.type === 'line' ? 2 : 0), curve: 'smooth' },
       markers: {
         size: 3,
         strokeWidth: 1,
-        colors: ['#f3066080', colorCost],
+        colors: ['#f3066040', colorCost],
         strokeColors: "#fff"
       },
       dataLabels: {
         enabled: false
       },
       xaxis: {
-        categories: monthLabels,
+        type: 'datetime',
+        min: new Date(`${new Date().getFullYear()}-01-01`).getTime() - 15 * 24 * 60 * 60 * 1000,
+        max: new Date(`${new Date().getFullYear()}-12-01`).getTime(),
+        tickAmount: 11,
         labels: {
+          datetimeFormatter: {
+            day: 'M月',
+            month: 'M月',
+            year: 'M月'
+          },
           style: {
             fontSize: '10px',
           },
@@ -2602,6 +2866,7 @@ class StateGridInfo extends LitElement {
       },
       yaxis: {
         min: 0,
+        max: yAxisMax > 0 ? Math.ceil(yAxisMax * 1.15 / 50) * 50 : undefined,
         floating: false,
         labels: {
           minWidth: 10,
@@ -2633,12 +2898,13 @@ class StateGridInfo extends LitElement {
         points: (() => {
           const points = [];
 
-          // 标记最大用电量
-          if (maxTotal > 0 && maxTotalIndex >= 0) {
+          // 标记最大用电量（动态查找电费系列索引）
+          const costSeriesIdx = seriesList.findIndex(s => s.name === '本年电费');
+          if (maxTotalPoint) {
             points.push({
-              x: maxTotalIndex,
-              y: maxTotal,
-              seriesIndex: 8,
+              x: maxTotalPoint.x,
+              y: maxTotalPoint.y,
+              seriesIndex: costSeriesIdx >= 0 ? costSeriesIdx : 0,
               marker: {
                 size: 0
               },
@@ -2657,9 +2923,9 @@ class StateGridInfo extends LitElement {
             });
 
             points.push({
-              x: maxTotalIndex,
-              y: maxTotal,
-              seriesIndex: 8,
+              x: maxTotalPoint.x,
+              y: maxTotalPoint.y,
+              seriesIndex: costSeriesIdx >= 0 ? costSeriesIdx : 0,
               marker: {
                 size: 4,
                 offsetX: 0,
@@ -2689,44 +2955,69 @@ class StateGridInfo extends LitElement {
         shared: true,
         intersect: false,
         custom: function({ series, seriesIndex, dataPointIndex, w }) {
-          const monthLabel = monthLabels[dataPointIndex] || '';
-          const lastYearStr = (new Date().getFullYear() - 1).toString();
-          const currentYearStr = new Date().getFullYear().toString();
+          // 优先从本年系列获取x值（本年x是正常的月初时间戳，未偏移）
+          // 如果本年系列无数据，则从上年系列获取并加回偏移
+          const currentYear = new Date().getFullYear();
+          let displayDate = '';
+          const seriesNames = w.globals.seriesNames;
+          let hoverX;
 
-          // series顺序：0上年谷,1上年平,2上年峰,3上年尖,4本年谷,5本年平,6本年峰,7本年尖,8上年电费,9本年电费
-          const seriesInfo = [
-            { name: '上年尖', unit: '度', color: colorLastTip, seriesIndex: 3 },
-            { name: '上年峰', unit: '度', color: colorLastPeak, seriesIndex: 2 },
-            { name: '上年平', unit: '度', color: colorLastNormal, seriesIndex: 1 },
-            { name: '上年谷', unit: '度', color: colorLastValley, seriesIndex: 0 },
-            { name: '上年电费', unit: '元', color: '#f3066080', seriesIndex: 8 },
-            { name: '本年尖', unit: '度', color: colorTip, seriesIndex: 7 },
-            { name: '本年峰', unit: '度', color: colorPeak, seriesIndex: 6 },
-            { name: '本年平', unit: '度', color: colorNormal, seriesIndex: 5 },
-            { name: '本年谷', unit: '度', color: colorValley, seriesIndex: 4 },
-            { name: '本年电费', unit: '元', color: colorCost, seriesIndex: 9 },
-          ];
+          // 优先找本年系列
+          const thisYearNames = seriesNames.filter(n => n.startsWith('本年'));
+          for (const name of thisYearNames) {
+            const idx = seriesNames.indexOf(name);
+            if (w.globals.seriesX[idx]?.[dataPointIndex] !== undefined) {
+              hoverX = w.globals.seriesX[idx][dataPointIndex];
+              break;
+            }
+          }
+
+          if (hoverX !== undefined) {
+            // 本年系列，x就是月初时间戳
+            const hoverDate = new Date(hoverX);
+            const month = String(hoverDate.getMonth() + 1).padStart(2, '0');
+            displayDate = `${currentYear}-${month}`;
+          } else {
+            // 本年无数据，从上年系列获取并加回偏移
+            for (let i = 0; i < w.globals.seriesX.length; i++) {
+              if (w.globals.seriesX[i]?.[dataPointIndex] !== undefined) {
+                hoverX = w.globals.seriesX[i][dataPointIndex];
+                break;
+              }
+            }
+            if (hoverX !== undefined) {
+              const originalDate = new Date(hoverX + 12 * 24 * 60 * 60 * 1000);
+              const month = String(originalDate.getMonth() + 1).padStart(2, '0');
+              displayDate = `${currentYear}-${month}`;
+            }
+          }
+
+          // series顺序动态生成，按名称查找索引
+          const getSeriesIndex = (name) => seriesNames.indexOf(name);
+
+          // 判断是否上年系列
+          const isLastYearSeries = seriesIndex >= 0 && seriesNames[seriesIndex]?.startsWith('上年');
 
           let tooltipHTML = `
             <div style="background: ${BgColor};color: ${Color};padding: 8px;border-radius: 4px;border: 1px solid ${Color};">
               <div style="font-weight: bold; font-size: 12px;color: ${Color};  border-bottom: 1px dashed #999;">
-                ${lastYearStr}/${currentYearStr} ${monthLabel}
+                ${displayDate}
               </div>
           `;
 
-          // 计算上年总用电量 (索引0-3是上年谷、平、峰、尖)
+          // 计算上年总用电量
+          const lastYearIndices = ['上年谷', '上年平', '上年峰', '上年尖'].map(getSeriesIndex).filter(i => i >= 0);
           let lastTotal = 0;
-          for (let i = 0; i < 4; i++) {
-            const value = series[i]?.[dataPointIndex] || 0;
-            lastTotal += value;
-          }
+          lastYearIndices.forEach(i => {
+            lastTotal += series[i]?.[dataPointIndex] || 0;
+          });
 
-          // 计算本年总用电量 (索引4-7是本年谷、平、峰、尖)
+          // 计算本年总用电量
+          const thisYearIndices = ['本年谷', '本年平', '本年峰', '本年尖'].map(getSeriesIndex).filter(i => i >= 0);
           let currentTotal = 0;
-          for (let i = 4; i < 8; i++) {
-            const value = series[i]?.[dataPointIndex] || 0;
-            currentTotal += value;
-          }
+          thisYearIndices.forEach(i => {
+            currentTotal += series[i]?.[dataPointIndex] || 0;
+          });
 
           // 显示上年总用电量
           if (lastTotal > 0) {
@@ -2754,9 +3045,24 @@ class StateGridInfo extends LitElement {
             `;
           }
 
-          // 遍历seriesInfo数组显示数据
-          seriesInfo.forEach((info) => {
-            const value = series[info.seriesIndex]?.[dataPointIndex];
+          // 遍历显示各系列数据
+          const allInfo = [
+            { name: '上年尖', unit: '度', color: colorLastTip },
+            { name: '上年峰', unit: '度', color: colorLastPeak },
+            { name: '上年平', unit: '度', color: colorLastNormal },
+            { name: '上年谷', unit: '度', color: colorLastValley },
+            { name: '上年电费', unit: '元', color: '#f3066040' },
+            { name: '本年尖', unit: '度', color: colorTip },
+            { name: '本年峰', unit: '度', color: colorPeak },
+            { name: '本年平', unit: '度', color: colorNormal },
+            { name: '本年谷', unit: '度', color: colorValley },
+            { name: '本年电费', unit: '元', color: colorCost },
+          ];
+
+          allInfo.forEach((info) => {
+            const idx = getSeriesIndex(info.name);
+            if (idx < 0) return;
+            const value = series[idx]?.[dataPointIndex];
             // 电费数据总是显示（即使为0），其他数据只在非0时显示
             if (value !== null && value !== undefined && (value !== 0 || info.unit === '元')) {
               tooltipHTML += `
@@ -2778,8 +3084,13 @@ class StateGridInfo extends LitElement {
 
       legend: {
         position: 'bottom',
-        formatter: function(seriesName) {
-          return seriesName;
+        showForNullSeries: false,
+        showForZeroSeries: false,
+        formatter: function(seriesName, opts) {
+          // 如果该系列所有数据都为0或空，不显示
+          const seriesData = opts.w.globals.series[opts.seriesIndex];
+          const hasData = seriesData && seriesData.some(val => val !== 0 && val !== null && val !== undefined);
+          return hasData ? seriesName : '';
         },
         markers: {
           width: 10,
@@ -2820,26 +3131,45 @@ class StateGridInfo extends LitElement {
 
   /*分析最近3个月的用电数据，根据尖平谷的用电量判断有哪些类型在使用*/
   getElectricityType(monthList) {
-    if (!monthList || monthList.length === 0) return null;
+    const types = this._calcElectricityTypes(monthList, 'month');
+    return types;
+  }
+
+  /* 根据用电数据计算存在的用电类型（尖/峰/平/谷）*/
+  _calcElectricityTypes(list, prefix) {
+    if (!list || list.length === 0) return null;
     
-    const last3Months = monthList.slice(0,3);
-    const totals = {
-      tip: 0, peak: 0, normal: 0, valley: 0
+    const fieldMap = {
+      month: { tip: 'monthTPq', peak: 'monthPPq', normal: 'monthNPq', valley: 'monthVPq', key: 'month' },
+      year:  { tip: 'yearTPq',  peak: 'yearPPq',  normal: 'yearNPq',  valley: 'yearVPq',  key: 'year' }
     };
+    const fields = fieldMap[prefix] || fieldMap.month;
     
-    last3Months.forEach(month => {
-      totals.tip += month.monthTPq || 0;
-      totals.peak += month.monthPPq || 0;
-      totals.normal += month.monthNPq || 0;
-      totals.valley += month.monthVPq || 0;
-      
+    // 月度取最近3个月，年度只取本年度
+    let items;
+    if (prefix === 'year') {
+      const currentYear = new Date().getFullYear().toString();
+      items = list.filter(item => String(item[fields.key]) === currentYear);
+    } else {
+      items = list.slice(0, 3);
+    }
+    
+    if (items.length === 0) return null;
+    
+    const totals = { tip: 0, peak: 0, normal: 0, valley: 0 };
+    items.forEach(item => {
+      totals.tip += item[fields.tip] || 0;
+      totals.peak += item[fields.peak] || 0;
+      totals.normal += item[fields.normal] || 0;
+      totals.valley += item[fields.valley] || 0;
     });
+    
     const types = [];
     if (totals.tip > 0) types.push('tip');
     if (totals.peak > 0) types.push('peak');
     if (totals.normal > 0) types.push('normal');
     if (totals.valley > 0) types.push('valley');
-
+    
     return types.length > 0 ? types : null;
   }
 
@@ -2854,19 +3184,31 @@ class StateGridInfo extends LitElement {
     
     const selectedEntity = this.hass.states[selectedEntityId];
     const prices = {};
+    
+    // 不分尖峰平谷的计费标准，不依赖 electricityTypes
+    if (billingStandard === '年阶梯') {
+      prices.single = selectedEntity.attributes.计费标准[`年阶梯第${currentLevel}档电价`];
+      return prices;
+    }
+    if (billingStandard === '月阶梯') {
+      prices.single = selectedEntity.attributes.计费标准[`月阶梯第${currentLevel}档电价`];
+      return prices;
+    }
+    if (billingStandard === '平均单价') {
+      prices.single = selectedEntity.attributes.计费标准.平均单价;
+      return prices;
+    }
+    
+    // 尖峰平谷类计费标准，需要 electricityTypes
     if (!electricityTypes || electricityTypes.length === 0) return prices;
     
     electricityTypes.forEach(type => {
-      const levelKey = `第${currentLevel}档`;
       switch (billingStandard) {
         case '年阶梯峰平谷':
           if (type === 'tip') prices.tip = selectedEntity.attributes.计费标准[`年阶梯第${currentLevel}档尖电价`];
           if (type === 'peak') prices.peak = selectedEntity.attributes.计费标准[`年阶梯第${currentLevel}档峰电价`];
           if (type === 'normal') prices.normal = selectedEntity.attributes.计费标准[`年阶梯第${currentLevel}档平电价`];
           if (type === 'valley') prices.valley = selectedEntity.attributes.计费标准[`年阶梯第${currentLevel}档谷电价`];
-          break;
-        case '年阶梯':
-          prices.single = selectedEntity.attributes.计费标准[`年阶梯第${currentLevel}档电价`];
           break;
         case '月阶梯峰平谷':
           if (type === 'tip') prices.tip = selectedEntity.attributes.计费标准[`月阶梯第${currentLevel}档尖电价`];
@@ -2884,13 +3226,12 @@ class StateGridInfo extends LitElement {
             prices.valley = selectedEntity.attributes.计费标准[`${monthKey}阶梯第${currentLevel}档谷电价`];
           }
           break;
-        case '月阶梯':
-          prices.single = selectedEntity.attributes.计费标准[`月阶梯第${currentLevel}档电价`];
-          break;
-        case '平均单价':
-          prices.single = selectedEntity.attributes.计费标准.平均单价;
-          break;
       }
+    });
+    
+    // 过滤掉 undefined 值
+    Object.keys(prices).forEach(key => {
+      if (prices[key] === undefined || prices[key] === null) delete prices[key];
     });
     
     return prices;
@@ -3098,65 +3439,20 @@ class StateGridInfo extends LitElement {
   }
 
   /*渲染价格区块*/
-  renderPriceBlock(prices, level) {
-    // 使用选中的余额实体而不是固定的this.entity
-    const selectedEntityId = this._selectedBalanceEntity;
-    if (!selectedEntityId || !this.hass || !this.hass.states[selectedEntityId]) {
-      return '';
-    }
+  renderPriceBlock(prices) {
+    if (!prices || Object.keys(prices).length === 0) return '';
     
-    const selectedEntity = this.hass.states[selectedEntityId];
-    const electricityTypes = this.getElectricityType(selectedEntity.attributes.monthlist);
-    const billingStandard = selectedEntity.attributes.计费标准?.计费标准;
-    
-    if (billingStandard === '平均单价') {
-
-
+    // 不分尖峰平谷：只显示单价
+    if (prices.single) {
       return html`<div class="price-item-block">单价：${prices.single}</div>`;
     }
     
-    let blockPrices = {};
-    if (electricityTypes) {
-      electricityTypes.forEach(type => {
-        switch (billingStandard) {
-          case '年阶梯峰平谷':
-            if (type === 'tip') blockPrices.tip = selectedEntity.attributes.计费标准[`年阶梯第${level}档尖电价`];
-            if (type === 'peak') blockPrices.peak = selectedEntity.attributes.计费标准[`年阶梯第${level}档峰电价`];
-            if (type === 'normal') blockPrices.normal = selectedEntity.attributes.计费标准[`年阶梯第${level}档平电价`];
-            if (type === 'valley') blockPrices.valley = selectedEntity.attributes.计费标准[`年阶梯第${level}档谷电价`];
-            break;
-          case '年阶梯':
-            blockPrices.single = selectedEntity.attributes.计费标准[`年阶梯第${level}档电价`];
-            break;
-          case '月阶梯峰平谷':
-            if (type === 'tip') blockPrices.tip = selectedEntity.attributes.计费标准[`月阶梯第${level}档尖电价`];
-            if (type === 'peak') blockPrices.peak = selectedEntity.attributes.计费标准[`月阶梯第${level}档峰电价`];
-            if (type === 'normal') blockPrices.normal = selectedEntity.attributes.计费标准[`月阶梯第${level}档平电价`];
-            if (type === 'valley') blockPrices.valley = selectedEntity.attributes.计费标准[`月阶梯第${level}档谷电价`];
-            break;
-          case '月阶梯峰平谷变动价格':
-            if (type === 'tip') blockPrices.tip = selectedEntity.attributes.计费标准[`月阶梯第${level}档尖电价`];
-            if (type === 'peak') blockPrices.peak = selectedEntity.attributes.计费标准[`月阶梯第${level}档峰电价`];
-            if (type === 'normal') blockPrices.normal = selectedEntity.attributes.计费标准[`月阶梯第${level}档平电价`];
-            if (type === 'valley') {
-              const currentMonth = new Date().getMonth() + 1;
-              const monthKey = `${currentMonth}月`;
-              blockPrices.valley = selectedEntity.attributes.计费标准[`${monthKey}阶梯第${level}档谷电价`];
-            }
-            break;
-          case '月阶梯':
-            blockPrices.single = selectedEntity.attributes.计费标准[`月阶梯第${level}档电价`];
-            break;
-        }
-      });
-    }
-    
+    // 尖峰平谷：只显示有值的项
     return html`
-      ${blockPrices.single ? html`<div class="price-item-block">单价：${blockPrices.single}</div>` : ''}
-      ${blockPrices.tip ? html`<div class="price-item-block">尖单价：${blockPrices.tip}</div>` : ''}
-      ${blockPrices.peak ? html`<div class="price-item-block">峰单价：${blockPrices.peak}</div>` : ''}
-      ${blockPrices.normal ? html`<div class="price-item-block">平单价：${blockPrices.normal}</div>` : ''}
-      ${blockPrices.valley ? html`<div class="price-item-block">谷单价：${blockPrices.valley}</div>` : ''}
+      ${prices.tip ? html`<div class="price-item-block">尖单价：${prices.tip}</div>` : ''}
+      ${prices.peak ? html`<div class="price-item-block">峰单价：${prices.peak}</div>` : ''}
+      ${prices.normal ? html`<div class="price-item-block">平单价：${prices.normal}</div>` : ''}
+      ${prices.valley ? html`<div class="price-item-block">谷单价：${prices.valley}</div>` : ''}
     `;
   }
 
@@ -3612,9 +3908,10 @@ class StateGridInfo extends LitElement {
         selectedEntity.attributes.计费标准?.当前月阶梯档?.replace('第', '').replace('档', '')
       );
     
-    const electricityTypes = this.getElectricityType(selectedEntity.attributes?.monthlist || []);
+    let electricityTypes = this.getElectricityType(selectedEntity.attributes?.monthlist || []);
+    if (!electricityTypes) electricityTypes = this._calcElectricityTypes(selectedEntity.attributes?.yearlist, 'year');
     const prices = currentLevel ? this.getElectricityPrices(billingStandard, currentLevel, electricityTypes) : {};
-    
+
     // 渲染阶梯区域内容
     let ladderContent = '';
     if (selectedEntity.attributes && selectedEntity.attributes.计费标准) {
@@ -3668,8 +3965,14 @@ class StateGridInfo extends LitElement {
         const maxArrowPosition = 99; // 最大99%
         const constrainedArrowPosition = Math.max(minArrowPosition, Math.min(maxArrowPosition, bubblePosition));
         
-        const electricityTypes = this.getElectricityType(selectedEntity.attributes.monthlist);
-        const prices = this.getElectricityPrices(billingStandard, currentLevel, electricityTypes);
+        // 先从月度数据判断用电类型，为空则从年度数据判断
+        let electricityTypes = this.getElectricityType(selectedEntity.attributes.monthlist);
+        if (!electricityTypes) {
+          electricityTypes = this._calcElectricityTypes(selectedEntity.attributes.yearlist, 'year');
+        }
+        const prices1 = this.getElectricityPrices(billingStandard, 1, electricityTypes);
+        const prices2 = this.getElectricityPrices(billingStandard, 2, electricityTypes);
+        const prices3 = this.getElectricityPrices(billingStandard, 3, electricityTypes);
         
         let periodInfo = '';
         if (isYearLadder) {
@@ -3697,15 +4000,15 @@ class StateGridInfo extends LitElement {
             <div class="ladder-price-section">
               <div class="price-block level1-price">
                 <div class="price-range">0-${secondLevelStart}度</div>
-                ${this.renderPriceBlock(prices, 1)}
+                ${this.renderPriceBlock(prices1)}
               </div>
               <div class="price-block level2-price">
                 <div class="price-range">${secondLevelStart}-${thirdLevelStart}度</div>
-                ${this.renderPriceBlock(prices, 2)}
+                ${this.renderPriceBlock(prices2)}
               </div>
               <div class="price-block level3-price">
                 <div class="price-range">${thirdLevelStart}度以上</div>
-                ${this.renderPriceBlock(prices, 3)}
+                ${this.renderPriceBlock(prices3)}
               </div>
             </div>
           </div>
@@ -3723,7 +4026,8 @@ class StateGridInfo extends LitElement {
           selectedEntity.attributes.计费标准?.当前月阶梯档?.replace('第', '').replace('档', '')
         );
       
-      const electricityTypes = this.getElectricityType(selectedEntity.attributes?.monthlist || []);
+      let electricityTypes = this.getElectricityType(selectedEntity.attributes?.monthlist || []);
+      if (!electricityTypes) electricityTypes = this._calcElectricityTypes(selectedEntity.attributes?.yearlist, 'year');
       const prices = currentLevel ? this.getElectricityPrices(billingStandard, currentLevel, electricityTypes) : {};
       const currentMonth = this.getCurrentMonth();
       const previousMonth = this.getPreviousMonth();
@@ -3795,7 +4099,6 @@ class StateGridInfo extends LitElement {
         `;
       }
         
-
     const daydate = selectedEntity.attributes?.daylist[0]?.day || '无';
     return html`
         <div class="card-main" style="background: ${BgColor}; color: ${Color}">

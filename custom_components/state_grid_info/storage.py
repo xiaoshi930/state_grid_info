@@ -96,7 +96,7 @@ class StateGridStorage:
                 existing_map[k].update(item)
             else:
                 existing_map[k] = item
-        return sorted(existing_map.values(), key=lambda x: x[key])
+        return sorted(existing_map.values(), key=lambda x: x[key], reverse=True)
 
     def update(self, new_data: dict[str, Any]) -> dict[str, Any]:
         """Update storage with new data, then return merged result.

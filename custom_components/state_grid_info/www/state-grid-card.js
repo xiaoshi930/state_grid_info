@@ -1,4 +1,4 @@
-console.info("%c 消逝卡-电费卡 \n%c        v 3.7 ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
+console.info("%c 消逝卡-电费卡 \n%c        v 3.6 ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 
 class StateGridPhoneEditor extends LitElement {
@@ -1954,75 +1954,56 @@ class StateGridInfo extends LitElement {
     const currentYear = new Date().getFullYear().toString();
 
     if (!selectedEntity?.attributes?.monthlist) return null;
-    // 确保数据安全，处理可能为空的情况
+
+    // 构建12个月的数据（1月-12月），无数据的月份填0
     const lastYearBills = selectedEntity.attributes.monthlist.filter(item =>
       item?.month && item.month.startsWith(lastYear)
     ) || [];
     const thisYearBills = selectedEntity.attributes.monthlist.filter(item =>
       item?.month && item.month.startsWith(currentYear)
     ) || [];
-    const lastmonthlist = [...lastYearBills ].slice(0, 12).reverse();
-    const monthlist = [...thisYearBills].slice(0, 12).reverse();
-    const lastmonthlistDay = [...lastYearBills ][0];
-    const monthlistDay = [...thisYearBills][0];
+
+    // 按月建立查找表
+    const lastYearMap = {};
+    lastYearBills.forEach(item => {
+      const m = parseInt(item.month.split("-")[1], 10);
+      lastYearMap[m] = item;
+    });
+    const thisYearMap = {};
+    thisYearBills.forEach(item => {
+      const m = parseInt(item.month.split("-")[1], 10);
+      thisYearMap[m] = item;
+    });
+
+    // 本年最新月数据
+    const currentMonth = new Date().getMonth() + 1;
+    const monthlistDay = thisYearMap[currentMonth] || thisYearBills[thisYearBills.length - 1] || null;
+    const lastmonthlistDay = lastYearMap[currentMonth] || lastYearBills[lastYearBills.length - 1] || null;
+
+    // 生成1-12月数据
+    const months = Array.from({length: 12}, (_, i) => i + 1);
     return {
-      tip: monthlist.map(item => ({
-        x: new Date(item.month.substr(0,7)+'-01').getTime(),
-        y: Number(item.monthTPq) || 0
-      })),
-      peak: monthlist.map(item => ({
-        x: new Date(item.month.substr(0,7)+'-01').getTime(),
-        y: Number(item.monthPPq) || 0
-      })),
-      normal: monthlist.map(item => ({
-        x: new Date(item.month.substr(0,7)+'-01').getTime(),
-        y: Number(item.monthNPq) || 0
-      })),
-      valley: monthlist.map(item => ({
-        x: new Date(item.month.substr(0,7)+'-01').getTime(),
-        y: Number(item.monthVPq) || 0
-      })),
-      total: monthlist.map(item => ({
-        x: new Date(item.month.substr(0,7)+'-01').getTime(),
-        y: (Number(item.monthTPq) || 0) + (Number(item.monthPPq) || 0) + (Number(item.monthNPq) || 0) + (Number(item.monthVPq) || 0)
-      })),
-      cost: monthlist.map(item => ({
-        x: new Date(item.month.substr(0,7)+'-01').getTime(),
-        y: Number(item.monthEleCost) || 0
-      })),
+      tip: months.map(m => Number(thisYearMap[m]?.monthTPq) || 0),
+      peak: months.map(m => Number(thisYearMap[m]?.monthPPq) || 0),
+      normal: months.map(m => Number(thisYearMap[m]?.monthNPq) || 0),
+      valley: months.map(m => Number(thisYearMap[m]?.monthVPq) || 0),
+      total: months.map(m => (Number(thisYearMap[m]?.monthTPq) || 0) + (Number(thisYearMap[m]?.monthPPq) || 0) + (Number(thisYearMap[m]?.monthNPq) || 0) + (Number(thisYearMap[m]?.monthVPq) || 0)),
+      cost: months.map(m => Number(thisYearMap[m]?.monthEleCost) || 0),
       current: {
         ele: monthlistDay?.monthEleNum || 0,
         cost: monthlistDay?.monthEleCost || 0,
-        days: monthlist.length
+        days: thisYearBills.length
       },
-      lasttip: lastmonthlist.map(item => ({
-        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
-        y: Number(item.monthTPq) || 0
-      })),
-      lastpeak: lastmonthlist.map(item => ({
-        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
-        y: Number(item.monthPPq) || 0
-      })),
-      lastnormal: lastmonthlist.map(item => ({
-        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
-        y: Number(item.monthNPq) || 0
-      })),
-      lastvalley: lastmonthlist.map(item => ({
-        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
-        y: Number(item.monthVPq) || 0
-      })),
-      lasttotal: lastmonthlist.map(item => ({
-        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
-        y: (Number(item.monthTPq) || 0) + (Number(item.monthPPq) || 0) + (Number(item.monthNPq) || 0) + (Number(item.monthVPq) || 0)
-      })),
-      lastcost: lastmonthlist.map(item => ({
-        x: new Date(`${currentYear}-${item.month.split("-")[1]}-01`).getTime(),
-        y: Number(item.monthEleCost) || 0
-      })),
+      lasttip: months.map(m => Number(lastYearMap[m]?.monthTPq) || 0),
+      lastpeak: months.map(m => Number(lastYearMap[m]?.monthPPq) || 0),
+      lastnormal: months.map(m => Number(lastYearMap[m]?.monthNPq) || 0),
+      lastvalley: months.map(m => Number(lastYearMap[m]?.monthVPq) || 0),
+      lasttotal: months.map(m => (Number(lastYearMap[m]?.monthTPq) || 0) + (Number(lastYearMap[m]?.monthPPq) || 0) + (Number(lastYearMap[m]?.monthNPq) || 0) + (Number(lastYearMap[m]?.monthVPq) || 0)),
+      lastcost: months.map(m => Number(lastYearMap[m]?.monthEleCost) || 0),
       lastcurrent: {
         ele: lastmonthlistDay?.monthEleNum || 0,
         cost: lastmonthlistDay?.monthEleCost || 0,
-        days: lastmonthlist.length
+        days: lastYearBills.length
       }
     };
   }
@@ -2461,9 +2442,9 @@ class StateGridInfo extends LitElement {
     const BgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
     
     // 计算总用电量的最大值
-    const totalValues = data.total.map(item => item.y);
+    const totalValues = data.total;
     const maxTotal = totalValues.length > 0 ? Math.max(...totalValues) : 0;
-    const maxTotalPoint = data.total.find(item => item.y === maxTotal);
+    const maxTotalIndex = totalValues.indexOf(maxTotal);
 
     const colorCost = this.colorCost;
     const colorNum = this.colorNum;
@@ -2480,36 +2461,28 @@ class StateGridInfo extends LitElement {
     const colorLastNormal = '#4CAF5080';
     const colorLastValley = '#00BCD480';
 
-    // 修改数据结构：为上年数据偏移时间，实现并列显示
-    // 使用较大的偏移量来区分上年和本年
-    const offsetMs = 12 * 24 * 60 * 60 * 1000; // 12天的偏移，确保两组数据清晰分开
-
-    const lasttipOffset = data.lasttip.map(item => ({ x: item.x - offsetMs, y: item.y }));
-    const lastpeakOffset = data.lastpeak.map(item => ({ x: item.x - offsetMs, y: item.y }));
-    const lastnormalOffset = data.lastnormal.map(item => ({ x: item.x - offsetMs, y: item.y }));
-    const lastvalleyOffset = data.lastvalley.map(item => ({ x: item.x - offsetMs, y: item.y }));
-    const lastcostOffset = data.lastcost.map(item => ({ x: item.x - offsetMs, y: item.y }));
+    const monthLabels = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 
     return {
       series: [
         {
           name: '上年谷',
-          data: lastvalleyOffset,
+          data: data.lastvalley,
           type: 'column'
         },
         {
           name: '上年平',
-          data: lastnormalOffset,
+          data: data.lastnormal,
           type: 'column'
         },
         {
           name: '上年峰',
-          data: lastpeakOffset,
+          data: data.lastpeak,
           type: 'column'
         },
         {
           name: '上年尖',
-          data: lasttipOffset,
+          data: data.lasttip,
           type: 'column'
         },
         {
@@ -2534,7 +2507,7 @@ class StateGridInfo extends LitElement {
         },
         {
           name: '上年电费',
-          data: lastcostOffset,
+          data: data.lastcost,
           type: 'line',
           color: '#f3066080'
         },
@@ -2616,13 +2589,8 @@ class StateGridInfo extends LitElement {
         enabled: false
       },
       xaxis: {
-        type: 'datetime',
+        categories: monthLabels,
         labels: {
-          datetimeFormatter: {
-            day: 'M月',
-            month: 'M月',
-            year: 'M月'
-          },
           style: {
             fontSize: '10px',
           },
@@ -2666,10 +2634,10 @@ class StateGridInfo extends LitElement {
           const points = [];
 
           // 标记最大用电量
-          if (maxTotalPoint) {
+          if (maxTotal > 0 && maxTotalIndex >= 0) {
             points.push({
-              x: maxTotalPoint.x,
-              y: maxTotalPoint.y,
+              x: maxTotalIndex,
+              y: maxTotal,
               seriesIndex: 8,
               marker: {
                 size: 0
@@ -2689,8 +2657,8 @@ class StateGridInfo extends LitElement {
             });
 
             points.push({
-              x: maxTotalPoint.x,
-              y: maxTotalPoint.y,
+              x: maxTotalIndex,
+              y: maxTotal,
               seriesIndex: 8,
               marker: {
                 size: 4,
@@ -2721,23 +2689,9 @@ class StateGridInfo extends LitElement {
         shared: true,
         intersect: false,
         custom: function({ series, seriesIndex, dataPointIndex, w }) {
-          // 使用鼠标悬停位置对应的x值
-          const hoverX = w.globals.seriesX[seriesIndex]?.[dataPointIndex];
-
-          // 判断是上年数据还是本年数据，并显示正确的日期
-          // 索引0-3是上年谷、平、峰、尖
-          // 索引4-7是本年谷、平、峰、尖
-          let displayDate;
-          if (seriesIndex >= 0 && seriesIndex <= 3) {
-            // 上年数据，需要加回12天偏移
-            const offsetMs = 12 * 24 * 60 * 60 * 1000;
-            const originalDate = new Date(hoverX + offsetMs);
-            displayDate = `${originalDate.getFullYear()}-${String(originalDate.getMonth() + 1).padStart(2, '0')}`;
-          } else {
-            // 本年数据
-            const originalDate = new Date(hoverX);
-            displayDate = `${originalDate.getFullYear()}-${String(originalDate.getMonth() + 1).padStart(2, '0')}`;
-          }
+          const monthLabel = monthLabels[dataPointIndex] || '';
+          const lastYearStr = (new Date().getFullYear() - 1).toString();
+          const currentYearStr = new Date().getFullYear().toString();
 
           // series顺序：0上年谷,1上年平,2上年峰,3上年尖,4本年谷,5本年平,6本年峰,7本年尖,8上年电费,9本年电费
           const seriesInfo = [
@@ -2756,7 +2710,7 @@ class StateGridInfo extends LitElement {
           let tooltipHTML = `
             <div style="background: ${BgColor};color: ${Color};padding: 8px;border-radius: 4px;border: 1px solid ${Color};">
               <div style="font-weight: bold; font-size: 12px;color: ${Color};  border-bottom: 1px dashed #999;">
-                ${displayDate}
+                ${lastYearStr}/${currentYearStr} ${monthLabel}
               </div>
           `;
 

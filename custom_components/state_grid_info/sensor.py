@@ -40,6 +40,7 @@ async def async_setup_entry(
     
     # 创建数据协调器
     coordinator = StateGridInfoDataCoordinator(hass, config)
+    await coordinator.async_load_storage()
     await coordinator.async_config_entry_first_refresh()
     
     # 创建传感器实体，确保实体ID包含用户的电力户号
@@ -70,10 +71,15 @@ class StateGridInfoDataCoordinator(DataUpdateCoordinator):
         # 初始化持久化存储
         consumer_number = config.get(CONF_CONSUMER_NUMBER, "default")
         self._storage = StateGridStorage(hass, consumer_number)
-        # 从持久化存储加载初始数据
-        self.data = dict(self._storage.data) if self._storage.data.get("dayList") else None
+        self.data = None
         
         self._setup_data_source()
+
+    async def async_load_storage(self) -> None:
+        """Load persistent storage data asynchronously."""
+        await self._storage.async_load()
+        if self._storage.data.get("dayList"):
+            self.data = dict(self._storage.data)
 
     def _setup_data_source(self):
         """Set up the data source based on configuration."""

@@ -24,7 +24,6 @@ class StateGridStorage:
         self._consumer_number = consumer_number
         self._file_path = hass.config.path(f"state_grid_info_{consumer_number}.json")
         self._data: dict[str, Any] = {}
-        self._load()
 
     @property
     def file_path(self) -> str:
@@ -36,8 +35,8 @@ class StateGridStorage:
         """Return current stored data."""
         return self._data
 
-    def _load(self) -> None:
-        """Load data from JSON file."""
+    def _load_sync(self) -> None:
+        """Load data from JSON file (sync, must run in executor)."""
         try:
             if os.path.exists(self._file_path):
                 with open(self._file_path, "r", encoding="utf-8") as f:
@@ -70,8 +69,12 @@ class StateGridStorage:
                 "consumer_name": "",
             }
 
-    def _save(self) -> None:
-        """Save data to JSON file."""
+    async def async_load(self) -> None:
+        """Load data from JSON file asynchronously."""
+        await self._hass.async_add_executor_job(self._load_sync)
+
+    def _save_sync(self) -> None:
+        """Save data to JSON file (sync, must run in executor)."""
         try:
             with open(self._file_path, "w", encoding="utf-8") as f:
                 json.dump(self._data, f, ensure_ascii=False, indent=2)
@@ -90,12 +93,9 @@ class StateGridStorage:
         for item in new_items:
             k = item[key]
             if k in existing_map:
-                # Update existing entry with new values
                 existing_map[k].update(item)
             else:
-                # Add new entry
                 existing_map[k] = item
-        # Sort by key ascending
         return sorted(existing_map.values(), key=lambda x: x[key])
 
     def update(self, new_data: dict[str, Any]) -> dict[str, Any]:
@@ -105,6 +105,9 @@ class StateGridStorage:
         - monthList: merge by "month"
         - yearList: merge by "year"
         - Scalar fields (date, balance, consumer_name): always update
+
+        Note: This method does synchronous file I/O via _save_sync.
+        It must be called via hass.async_add_executor_job from async code.
         """
         if not new_data:
             return self._data
@@ -135,7 +138,7 @@ class StateGridStorage:
             )
 
         # Save to file
-        self._save()
+        self._save_sync()
 
         _LOGGER.info(
             "数据已合并并持久化: dayList=%d条, monthList=%d条, yearList=%d条",
@@ -144,5 +147,4 @@ class StateGridStorage:
             len(self._data.get("yearList", [])),
         )
 
-        # Return a copy of the merged data
         return dict(self._data)

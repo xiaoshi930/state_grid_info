@@ -1,4 +1,4 @@
-console.info("%c 消逝卡-电费卡 \n%c        v 3.9 ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
+console.info("%c 消逝卡-电费卡 \n%c        v 4.0 ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 
 window.customCards = window.customCards || [];
@@ -4736,7 +4736,7 @@ class XiaoshiStateGridButton extends LitElement {
     const excludedParams = [
       'type', 'button_height', 'button_width', 'button_font_size', 'button_icon_size',
       'popup_top', 'popup_width', 'display_mode', 'decimal_precision', 'emoji',
-      'tablet_mode', 'default_show_calendar'
+      'tablet_mode'
     ];
     const stateGridCardConfig = {};
     Object.keys(this.config).forEach(key => {

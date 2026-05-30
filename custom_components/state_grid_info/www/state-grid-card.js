@@ -2869,6 +2869,11 @@ class  XiaoshiStateGridInfo extends LitElement {
             month: 'M月',
             year: 'M月'
           },
+          formatter: function(val, timestamp, opts) {
+            const date = new Date(timestamp);
+            const month = date.getMonth() + 1;
+            return month + '月';
+          },
           style: {
             fontSize: '10px',
           },

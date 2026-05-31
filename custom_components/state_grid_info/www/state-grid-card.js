@@ -1,4 +1,4 @@
-console.info("%c 消逝卡-电费卡 \n%c        v 4.0 ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
+console.info("%c 消逝卡-电费卡 \n%c        v 4.1 ", "color: red; font-weight: bold; background: black", "color: white; font-weight: bold; background: black");
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 
 window.customCards = window.customCards || [];
@@ -286,11 +286,12 @@ class XiaoshiStateGridEditor extends LitElement {
           <label>主题：
           <select 
             @change=${this._valueChanged}
-            .value=${this.config.theme !== undefined ? this.config.theme : 'on'}
+            .value=${this.config.theme !== undefined ? this.config.theme : 'system'}
             name="theme"
           >
-            <option value="on">浅色主题</option>
-            <option value="off">深色主题</option>
+            <option value="system">跟随系统</option>
+            <option value="light">浅色主题</option>
+            <option value="dark">深色主题</option>
           </select>
           </label>
         </div>
@@ -796,7 +797,7 @@ class  XiaoshiStateGridInfo extends LitElement {
     this.year = today.getFullYear();
     this.month = today.getMonth() + 1;
     this.width = '380px';
-    this.theme = 'on';
+    this.theme = 'system';
     this.dayData = [];
     this.activeNav = '';
     this.monthData = null;
@@ -2375,8 +2376,8 @@ class  XiaoshiStateGridInfo extends LitElement {
 
   _getChartDayConfig(data) {
     const theme = this._evaluateTheme();
-    const Color = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
-    const BgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
+    const Color = theme === 'light' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
+    const BgColor = theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
 
     // 计算总用电量的最大值
     const maxTotal = data.total.length > 0 ? Math.max(...data.total) : 0;
@@ -2719,8 +2720,8 @@ class  XiaoshiStateGridInfo extends LitElement {
 
   _getChartMonthConfig(data) {
     const theme = this._evaluateTheme();
-    const Color = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
-    const BgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
+    const Color = theme === 'light' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
+    const BgColor = theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
     
     // 计算本年总用电量的最大值
     const totalValues = data.total.map(item => item.y);
@@ -3270,8 +3271,8 @@ class  XiaoshiStateGridInfo extends LitElement {
  /*渲染日度用电条形图*/
   renderDayBar(usage) {
     const theme = this._evaluateTheme();
-    const Color = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
-    const Shadow = theme === 'on' ? '0 1px 2px rgba(255, 255, 255, 0.3)' : '0 1px 2px rgba(47, 45, 45, 0.6)';
+    const Color = theme === 'light' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
+    const Shadow = theme === 'light' ? '0 1px 2px rgba(255, 255, 255, 0.3)' : '0 1px 2px rgba(47, 45, 45, 0.6)';
 
     const total = usage.dayTPq + usage.dayPPq + usage.dayNPq + usage.dayVPq;
     if (total === 0) return '';
@@ -3335,8 +3336,8 @@ class  XiaoshiStateGridInfo extends LitElement {
   /*渲染月度用电条形图*/
   renderUsageBar(usage) {
     const theme = this._evaluateTheme();
-    const Color = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
-    const Shadow = theme === 'on' ? '0 1px 2px rgba(255, 255, 255, 0.3)' : '0 1px 2px rgba(50, 50, 50, 0.6)';
+    const Color = theme === 'light' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
+    const Shadow = theme === 'light' ? '0 1px 2px rgba(255, 255, 255, 0.3)' : '0 1px 2px rgba(50, 50, 50, 0.6)';
 
     const total = usage.monthTPq + usage.monthPPq + usage.monthNPq + usage.monthVPq;
     if (total === 0) return '';
@@ -3400,8 +3401,8 @@ class  XiaoshiStateGridInfo extends LitElement {
   /*渲染年度用电条形图*/
   renderYearUsageBar(usage) {
     const theme = this._evaluateTheme();
-    const Color = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
-    const Shadow = theme === 'on' ? '0 1px 2px rgba(255, 255, 255, 0.3)' : '0 1px 2px rgba(50, 50, 50, 0.6)';
+    const Color = theme === 'light' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
+    const Shadow = theme === 'light' ? '0 1px 2px rgba(255, 255, 255, 0.3)' : '0 1px 2px rgba(50, 50, 50, 0.6)';
     const total = usage.yearTPq + usage.yearPPq + usage.yearNPq + usage.yearVPq;
     if (total === 0) return '';
     
@@ -3511,20 +3512,24 @@ class  XiaoshiStateGridInfo extends LitElement {
   }
   
   _evaluateTheme() {
-    try {
-      if (!this.config || !this.config.theme) return 'on';
-      if (typeof this.config.theme === 'function') {
-        return this.config.theme();
+      try {
+          const mode = this.config ? this.config.theme : 'system';
+          if (mode === 'light') return 'light';
+          if (mode === 'dark') return 'dark';
+          if (mode === 'system' || !mode) {
+              if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+              return 'light';
+          }
+          if (mode === 'function' || (typeof mode === 'string' && mode.includes('theme()'))) {
+              if (typeof window.theme === 'function') {
+                  return window.theme() || 'light';
+              }
+            return 'light';
+          }
+          return mode;
+      } catch (e) {
+          return 'light';
       }
-      if (typeof this.config.theme === 'string' && 
-          (this.config.theme.includes('return') || this.config.theme.includes('=>'))) {
-        return (new Function(`return ${this.config.theme}`))();
-      }
-      return this.config.theme;
-    } catch(e) {
-      console.error('计算主题时出错:', e);
-      return 'on';
-    }
   }
 
   /*日历功能函数*/
@@ -3632,8 +3637,8 @@ class  XiaoshiStateGridInfo extends LitElement {
 
     const data = this._processedDayData;
     const theme = this._evaluateTheme();
-    const backgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
-    const textColor = theme === 'on' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)';
+    const backgColor = theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
+    const textColor = theme === 'light' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)';
     return html`
       <ha-card class="card-chart" style="; height: 300px; background: ${backgColor};">
         <div class="label label1">
@@ -3658,8 +3663,8 @@ class  XiaoshiStateGridInfo extends LitElement {
   renderChartMonth() {
     const data = this._processedMonthData;
     const theme = this._evaluateTheme();
-    const backgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
-    const textColor = theme === 'on' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)';
+    const backgColor = theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
+    const textColor = theme === 'light' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)';
     return html`
       <ha-card class="card-chart" style="height: 300px; background: ${backgColor};">
         <div class="label label1">
@@ -3687,9 +3692,9 @@ class  XiaoshiStateGridInfo extends LitElement {
     };
     
     // 获取主题和颜色
-    const theme = this.config.theme || 'on';
-    const fgColor = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
-    const bgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
+    const theme = this.config.theme || 'system';
+    const fgColor = theme === 'light' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
+    const bgColor = theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
     
     // 计算总金额的预警状态
     const totalAmount = this._calculateTotalAmount();
@@ -3777,8 +3782,8 @@ class  XiaoshiStateGridInfo extends LitElement {
     const selectedEntity = this.hass.states[selectedEntityId];
     this.updateDayData();
     const theme = this._evaluateTheme();
-    const bgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
-    const fgColor = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
+    const bgColor = theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
+    const fgColor = theme === 'light' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
     const daysInMonth = this.getDaysInMonth(this.year, this.month);
     const firstDayOfMonth = new Date(this.year, this.month - 1, 1).getDay();
     const adjustedFirstDay = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
@@ -3903,12 +3908,12 @@ class  XiaoshiStateGridInfo extends LitElement {
 
   renderMain() {
     const theme = this._evaluateTheme();
-    const Color = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
-    const Color2 = theme === 'on' ? 'rgb(0, 0, 0 ,0.7)' : 'rgb(255, 255, 255,0.7)';
-    const BgColor = theme === 'on' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
-    const BgColor2 = theme === 'on' ? 'rgb(150, 150, 150, 0.1)' : 'rgb(255, 255,255,0.1)';
-    const Shadow = theme === 'on' ? '0 1px 2px rgba(255, 255, 255, 0.3)' : '0 1px 2px rgba(50, 50, 50, 0.6)';
-    const svgpath = theme === 'on' ? '/state_grid_info-local/icon/state-grid-on.svg' : '/state_grid_info-local/icon/state-grid-off.svg';
+    const Color = theme === 'light' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
+    const Color2 = theme === 'light' ? 'rgb(0, 0, 0 ,0.7)' : 'rgb(255, 255, 255,0.7)';
+    const BgColor = theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(50, 50, 50)';
+    const BgColor2 = theme === 'light' ? 'rgb(150, 150, 150, 0.1)' : 'rgb(255, 255,255,0.1)';
+    const Shadow = theme === 'light' ? '0 1px 2px rgba(255, 255, 255, 0.3)' : '0 1px 2px rgba(50, 50, 50, 0.6)';
+    const svgpath = theme === 'light' ? '/state_grid_info-local/icon/state-grid-on.svg' : '/state_grid_info-local/icon/state-grid-off.svg';
 
     // 使用选中的余额实体而不是固定的this.entity
     const selectedEntityId = this._selectedBalanceEntity;
@@ -4343,9 +4348,9 @@ class XiaoshiStateGridButtonEditor extends LitElement {
 
         <div class="form-group">
           <label>主题</label>
-          <select @change=${this._entityChanged} .value=${this.config.theme !== undefined ? this.config.theme : 'on'} name="theme">
-            <option value="on">浅色主题</option>
-            <option value="off">深色主题</option>
+          <select @change=${this._entityChanged} .value=${this.config.theme !== undefined ? this.config.theme : 'system'} name="theme">
+            <option value="light">浅色主题</option>
+            <option value="dark">深色主题</option>
           </select>
         </div>
 
@@ -4627,7 +4632,7 @@ class XiaoshiStateGridButton extends LitElement {
     this._balanceData = [];
     this._loading = false;
     this._refreshInterval = null;
-    this.theme = 'on';
+    this.theme = 'system';
     this._popupOverlay = null;
     this._popupElement = null;
     this._popupCardElement = null;
@@ -4656,14 +4661,24 @@ class XiaoshiStateGridButton extends LitElement {
   }
 
   _evaluateTheme() {
-    try {
-      if (!this.config || !this.config.theme) return 'on';
-      if (typeof this.config.theme === 'function') return this.config.theme();
-      if (typeof this.config.theme === 'string' && (this.config.theme.includes('return') || this.config.theme.includes('=>'))) {
-        return (new Function(`return ${this.config.theme}`))();
+      try {
+          const mode = this.config ? this.config.theme : 'system';
+          if (mode === 'light') return 'light';
+          if (mode === 'dark') return 'dark';
+          if (mode === 'system' || !mode) {
+              if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+              return 'light';
+          }
+          if (mode === 'function' || (typeof mode === 'string' && mode.includes('theme()'))) {
+              if (typeof window.theme === 'function') {
+                  return window.theme() || 'light';
+              }
+            return 'light';
+          }
+          return mode;
+      } catch (e) {
+          return 'light';
       }
-      return this.config.theme;
-    } catch(e) { return 'on'; }
   }
 
   disconnectedCallback() {
@@ -4906,10 +4921,10 @@ class XiaoshiStateGridButton extends LitElement {
     if (!this.hass) return html`<div class="loading">等待Home Assistant连接...</div>`;
 
     const theme = this._evaluateTheme();
-    const fgColor = theme === 'on' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
+    const fgColor = theme === 'light' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
     const buttonEmoji = '⚡';
     const tabletMode = this.config.tablet_mode === true;
-    const buttonBgColor = tabletMode ? 'transparent' : theme === 'on' ? 'rgb(255, 255, 255, 0.6)' : 'rgb(83, 83, 83, 0.6)';
+    const buttonBgColor = tabletMode ? 'transparent' : theme === 'light' ? 'rgb(255, 255, 255, 0.6)' : 'rgb(83, 83, 83, 0.6)';
 
     const { value: displayValue, unit: displayUnit, isWarning } = this._computeDisplayValue();
 

@@ -32,7 +32,7 @@ import json
 import logging
 import os
 from calendar import monthrange
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Any, Optional
 
 from homeassistant.core import HomeAssistant
@@ -41,8 +41,8 @@ _LOGGER = logging.getLogger(__name__)
 
 STORAGE_SCHEMA_VERSION = 1
 
-# 保留最近 N 年的日数据；月/年数据全量保留
-DAILY_RETENTION_YEARS = 5
+# 日/月/年数据均全量保留，不做时间窗口裁剪。
+# （原 DAILY_RETENTION_YEARS = 5 的清理逻辑已移除，避免静默删除历史日数据）
 
 # 扁平格式中的列表字段定义（与 4.2 版一致）
 _DAY_FIELDS = ("day", "dayEleNum", "dayEleCost", "dayTPq", "dayPPq", "dayNPq", "dayVPq")
@@ -404,9 +404,9 @@ class StateGridStorage:
                 if v is not None:
                     acct_meta[k] = v
 
-        # 清理超过保留窗口的日数据
-        cutoff = (date.today() - timedelta(days=DAILY_RETENTION_YEARS * 365)).isoformat()
-        account["daily"] = {k: v for k, v in daily.items() if k >= cutoff}
+        # 不做时间窗口裁剪：日数据全量保留。
+        # 原逻辑此处会删除超过 DAILY_RETENTION_YEARS 年的日数据，属静默丢数据。
+        # （daily 是 account["daily"] 的引用，上面的增量合并已直接写入账本）
 
     async def async_merge_monthly_records(
         self,
@@ -772,14 +772,19 @@ class StateGridStorage:
         return round(total, 2)
 
     async def async_get_runtime_snapshot(self, consumer_number: str) -> dict:
-        """构建 coordinator 向实体暴露的运行时快照（UI 裁剪视图）。
+        """构建 coordinator 向实体暴露的运行时快照（全量视图，不做窗口截断）。
 
-        - daylist：最近 70 天，降序
-        - monthlist：最近 24 个月，降序
+        - daylist：全部日数据，降序
+        - monthlist：全部月份，降序
         - yearlist：全部年份，降序
         - overview 字段供 Overview Sensor 使用
         - energy/cost 字段供能源类 sensor 使用
         - rechargelist：充值记录（数据源提供时）
+
+        注意：此处曾把 daylist 截断为最近 70 天、monthlist 截断为最近 24 个月，
+        以避免状态属性过大；但状态属性一旦超过 16384 字节，Recorder 会直接丢弃
+        整份属性不写库（日志报 "exceed maximum size of 16384 bytes"），截断并不能
+        绕开该限制，反而让卡片拿不到完整历史。故改为全量返回。
         """
         account = self._ensure_account(consumer_number)
         meta = account["meta"]
@@ -787,11 +792,8 @@ class StateGridStorage:
         monthly = account["monthly"]
         yearly = account["yearly"]
 
-        sorted_days = sorted(daily.values(), key=lambda x: x["day"], reverse=True)
-        daylist = sorted_days[:70]
-
-        sorted_months = sorted(monthly.values(), key=lambda x: x["month"], reverse=True)
-        monthlist = sorted_months[:24]
+        daylist = sorted(daily.values(), key=lambda x: x["day"], reverse=True)
+        monthlist = sorted(monthly.values(), key=lambda x: x["month"], reverse=True)
 
         yearlist = sorted(yearly.values(), key=lambda x: x["year"], reverse=True)
 

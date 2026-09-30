@@ -604,10 +604,10 @@ class StateGridInfoCoordinator(DataUpdateCoordinator):
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
         """Return merged lists from storage.
 
-        dayList 保持一个有限窗口，避免状态属性过大；月/年列表直接使用融合后的账本数据。
+        日/月/年列表均全量返回，不做窗口截断（原 dayList 截断为最近 400 天）。
         """
         account = await self.storage.async_get_account(consumer_number)
-        day_list = sorted(account.get("daily", {}).values(), key=lambda x: x["day"], reverse=True)[:400]
+        day_list = sorted(account.get("daily", {}).values(), key=lambda x: x["day"], reverse=True)
         month_list = sorted(account.get("monthly", {}).values(), key=lambda x: x["month"], reverse=True)
         year_list = sorted(account.get("yearly", {}).values(), key=lambda x: x["year"], reverse=True)
         return day_list, month_list, year_list

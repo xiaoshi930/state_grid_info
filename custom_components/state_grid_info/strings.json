@@ -19,6 +19,13 @@
           "consumer_number": "户号"
         }
       },
+      "app_consumer": {
+        "title": "选择户号",
+        "description": "请选择要使用的国家电网户号（数据来自网上国网 App）",
+        "data": {
+          "consumer_number": "户号"
+        }
+      },
       "qinglong_mqtt": {
         "title": "MQTT配置",
         "description": "请输入MQTT服务器信息和国网ID",
@@ -79,6 +86,8 @@
     "error": {
       "hassbox_config_not_found": "未找到HassBox配置文件",
       "hassbox_config_error": "读取HassBox配置文件出错",
+      "app_config_not_found": "未找到网上国网 App 配置文件，请确保已安装并配置 state_grid_app 集成",
+      "app_config_error": "读取网上国网 App 配置文件出错，请检查文件格式是否正确",
       "mqtt_connection_error": "MQTT连接失败"
     },
     "abort": {
@@ -101,6 +110,13 @@
       "hassbox_consumer": {
         "title": "修改户号",
         "description": "请选择要使用的国家电网户号",
+        "data": {
+          "consumer_number": "户号"
+        }
+      },
+      "app_consumer": {
+        "title": "修改户号",
+        "description": "请选择要使用的国家电网户号（数据来自网上国网 App）",
         "data": {
           "consumer_number": "户号"
         }
@@ -194,6 +210,8 @@
     "error": {
       "hassbox_config_not_found": "未找到HassBox配置文件",
       "hassbox_config_error": "读取HassBox配置文件出错",
+      "app_config_not_found": "未找到网上国网 App 配置文件，请确保已安装并配置 state_grid_app 集成",
+      "app_config_error": "读取网上国网 App 配置文件出错，请检查文件格式是否正确",
       "mqtt_connection_error": "MQTT连接失败"
     },
     "progress": {

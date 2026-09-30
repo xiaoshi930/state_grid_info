@@ -12,7 +12,8 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import (
     DOMAIN, NAME,
-    DATA_SOURCE_HASSBOX, DATA_SOURCE_QINGLONG, DATA_SOURCE_OPTIONS, DATA_SOURCE_NAMES,
+    DATA_SOURCE_HASSBOX, DATA_SOURCE_QINGLONG, DATA_SOURCE_STATE_GRID_APP,
+    DATA_SOURCE_OPTIONS, DATA_SOURCE_NAMES,
     BILLING_STANDARD_OPTIONS, BILLING_STANDARD_NAMES,
     BILLING_STANDARD_YEAR_阶梯, BILLING_STANDARD_YEAR_阶梯_峰平谷,
     BILLING_STANDARD_MONTH_阶梯, BILLING_STANDARD_MONTH_阶梯_峰平谷,
@@ -43,6 +44,7 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._data = {}
         self._consumer_numbers = []
         self._hassbox_data = None
+        self._app_data = None
         
     def _read_config_file(self, config_path):
         """在执行器中读取配置文件。"""
@@ -66,6 +68,8 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             
             if user_input[CONF_DATA_SOURCE] == DATA_SOURCE_HASSBOX:
                 return await self.async_step_hassbox_consumer()
+            elif user_input[CONF_DATA_SOURCE] == DATA_SOURCE_STATE_GRID_APP:
+                return await self.async_step_app_consumer()
             else:
                 return await self.async_step_qinglong_mqtt()
         
@@ -126,6 +130,58 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         
         return self.async_show_form(
             step_id="hassbox_consumer",
+            data_schema=vol.Schema({
+                vol.Required(CONF_CONSUMER_NUMBER): vol.In(consumer_options),
+            }),
+            errors=errors,
+        )
+
+    #处理网上国网 App 集成
+    async def async_step_app_consumer(self, user_input=None):
+        errors = {}
+
+        if self._consumer_numbers == []:
+            try:
+                # 读取网上国网 App 配置文件
+                config_path = self.hass.config.path(".storage", "state_grid_app.config")
+                if os.path.exists(config_path):
+                    config_data = await self.hass.async_add_executor_job(
+                        self._read_config_file, config_path
+                    )
+                    self._app_data = config_data
+
+                    if "data" in config_data and "powerUserList" in config_data["data"]:
+                        power_user_list = config_data["data"]["powerUserList"]
+                        for i, user in enumerate(power_user_list):
+                            if "consNo_dst" in user:
+                                self._consumer_numbers.append({
+                                    "index": i,
+                                    "number": user["consNo_dst"],
+                                    "name": user.get("consName_dst", "")
+                                })
+                else:
+                    errors["base"] = "app_config_not_found"
+            except Exception as ex:
+                _LOGGER.error("Error reading App config: %s", ex)
+                errors["base"] = "app_config_error"
+
+        if user_input is not None and not errors:
+            self._data[CONF_CONSUMER_NUMBER] = user_input[CONF_CONSUMER_NUMBER]
+            self._data[CONF_CONSUMER_NUMBER_INDEX] = next(
+                (item["index"] for item in self._consumer_numbers if item["number"] == user_input[CONF_CONSUMER_NUMBER]),
+                0
+            )
+            # 保存户名
+            self._data[CONF_CONSUMER_NAME] = next(
+                (item["name"] for item in self._consumer_numbers if item["number"] == user_input[CONF_CONSUMER_NUMBER]),
+                ""
+            )
+            return await self.async_step_billing_standard()
+
+        consumer_options = {item["number"]: item["number"] for item in self._consumer_numbers}
+
+        return self.async_show_form(
+            step_id="app_consumer",
             data_schema=vol.Schema({
                 vol.Required(CONF_CONSUMER_NUMBER): vol.In(consumer_options),
             }),
@@ -392,6 +448,7 @@ class StateGridInfoOptionsFlowHandler(config_entries.OptionsFlow):
         self._config_entry = config_entry
         self._data = dict(config_entry.data)
         self._consumer_numbers = []
+        self._app_data = None
 
     def _read_config_file(self, config_path):
         """在执行器中读取配置文件。"""
@@ -415,6 +472,8 @@ class StateGridInfoOptionsFlowHandler(config_entries.OptionsFlow):
             
             if user_input[CONF_DATA_SOURCE] == DATA_SOURCE_HASSBOX:
                 return await self.async_step_hassbox_consumer()
+            elif user_input[CONF_DATA_SOURCE] == DATA_SOURCE_STATE_GRID_APP:
+                return await self.async_step_app_consumer()
             else:
                 return await self.async_step_qinglong_mqtt()
         
@@ -475,6 +534,59 @@ class StateGridInfoOptionsFlowHandler(config_entries.OptionsFlow):
         
         return self.async_show_form(
             step_id="hassbox_consumer",
+            data_schema=vol.Schema({
+                vol.Required(CONF_CONSUMER_NUMBER, default=current_consumer): vol.In(consumer_options),
+            }),
+            errors=errors,
+        )
+
+    async def async_step_app_consumer(self, user_input=None):
+        """Handle 网上国网 App consumer selection."""
+        errors = {}
+
+        if self._consumer_numbers == []:
+            try:
+                # 读取网上国网 App 配置文件
+                config_path = self.hass.config.path(".storage", "state_grid_app.config")
+                if os.path.exists(config_path):
+                    config_data = await self.hass.async_add_executor_job(
+                        self._read_config_file, config_path
+                    )
+                    self._app_data = config_data
+
+                    if "data" in config_data and "powerUserList" in config_data["data"]:
+                        power_user_list = config_data["data"]["powerUserList"]
+                        for i, user in enumerate(power_user_list):
+                            if "consNo_dst" in user:
+                                self._consumer_numbers.append({
+                                    "index": i,
+                                    "number": user["consNo_dst"],
+                                    "name": user.get("consName_dst", "")
+                                })
+                else:
+                    errors["base"] = "app_config_not_found"
+            except Exception as ex:
+                _LOGGER.error("Error reading App config: %s", ex)
+                errors["base"] = "app_config_error"
+
+        if user_input is not None and not errors:
+            self._data[CONF_CONSUMER_NUMBER] = user_input[CONF_CONSUMER_NUMBER]
+            self._data[CONF_CONSUMER_NUMBER_INDEX] = next(
+                (item["index"] for item in self._consumer_numbers if item["number"] == user_input[CONF_CONSUMER_NUMBER]),
+                0
+            )
+            # 保存户名
+            self._data[CONF_CONSUMER_NAME] = next(
+                (item["name"] for item in self._consumer_numbers if item["number"] == user_input[CONF_CONSUMER_NUMBER]),
+                ""
+            )
+            return await self.async_step_billing_standard()
+
+        consumer_options = {item["number"]: item["number"] for item in self._consumer_numbers}
+        current_consumer = self._data.get(CONF_CONSUMER_NUMBER)
+
+        return self.async_show_form(
+            step_id="app_consumer",
             data_schema=vol.Schema({
                 vol.Required(CONF_CONSUMER_NUMBER, default=current_consumer): vol.In(consumer_options),
             }),

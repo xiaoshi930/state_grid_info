@@ -80,6 +80,37 @@ def _is_day_all_zero(item) -> bool:
     )
 
 
+def _is_placeholder_day(item) -> bool:
+    """判断一条日记录是否为数据源的「占位条目」。
+
+    青龙脚本等数据源会把「当月完整日历」一次性推送过来，其中：
+
+    - **晚于今天的日期**：各项均为 0，纯粹是占位，永远不会是真实读数；
+    - **今天的日期**：日结算尚未完成（次日才出数），同样是全 0 占位。
+
+    这两类条目没有统计与展示意义，一旦进入账本就会表现为「月底一堆 0 值
+    日期」，并污染实体属性 daylist。故在入口丢弃、在出口兜底过滤。
+
+    注意与 :func:`_is_day_all_zero` 的区别：后者只判数值全 0，本函数还结合了
+    日期。判断"今天是否有真实数据"要看数值，因此今天必须全 0 才算占位 ——
+    若数据源在当天提供了真实用电量，仍会正常保留。
+    """
+    if not isinstance(item, dict):
+        return False
+    day = item.get("day")
+    if not day:
+        return False
+    try:
+        day_date = date.fromisoformat(str(day))
+    except (TypeError, ValueError):
+        return False
+
+    today = date.today()
+    if day_date > today:
+        return True
+    return day_date == today and _is_day_all_zero(item)
+
+
 def _trim_consecutive_zero_days(day_list: list) -> list:
     """删除 dayList 首尾连续的全 0 日数据，保留中间有效区段。
 
@@ -371,10 +402,17 @@ class StateGridStorage:
         account = self._ensure_account(consumer_number)
         daily = account["daily"]
         now_iso = datetime.now().astimezone().isoformat()
+        dropped_placeholder = 0
 
         for rec in records:
             day = rec.get("day")
             if not day:
+                continue
+
+            # 占位条目（未来日期、或今天尚未结算的全 0 记录）不是真实抄表数据，
+            # 直接丢弃，避免污染实体属性与月度汇总。
+            if _is_placeholder_day(rec):
+                dropped_placeholder += 1
                 continue
 
             incoming: dict[str, Any] = {
@@ -396,6 +434,26 @@ class StateGridStorage:
                 daily[day] = incoming
             else:
                 daily[day] = self._merge_day_record(existing, incoming)
+
+        if dropped_placeholder:
+            _LOGGER.debug(
+                "已丢弃 %s 条占位日数据（未来日期 / 今天尚未结算，户号 %s）",
+                dropped_placeholder,
+                consumer_number,
+            )
+
+        # 顺带清理账本中历史遗留的占位日（旧版本曾把未来日期直接写入账本）。
+        # 只对「日期不早于今天」的键做判断，正常情况下只有 0~1 个，开销可忽略。
+        today_str = date.today().isoformat()
+        stale_days = [
+            d for d in list(daily) if d >= today_str and _is_placeholder_day(daily[d])
+        ]
+        for d in stale_days:
+            daily.pop(d, None)
+        if stale_days:
+            _LOGGER.debug(
+                "已清理 %s 条历史遗留的占位日数据（户号 %s）", len(stale_days), consumer_number
+            )
 
         # 更新 meta 字段（仅覆盖非 None 值）
         if meta:
@@ -771,6 +829,21 @@ class StateGridStorage:
 
         return round(total, 2)
 
+    async def async_get_visible_daily_list(self, consumer_number: str) -> list[dict]:
+        """返回可对外暴露的日数据列表（按日期降序，已剔除占位条目）。
+
+        供运行时快照与 coordinator 取数共用，保证「实体属性」与「coordinator.data」
+        对占位日的口径完全一致。
+        """
+        account = self._ensure_account(consumer_number)
+        return [
+            item
+            for item in sorted(
+                account["daily"].values(), key=lambda x: x["day"], reverse=True
+            )
+            if not _is_placeholder_day(item)
+        ]
+
     async def async_get_runtime_snapshot(self, consumer_number: str) -> dict:
         """构建 coordinator 向实体暴露的运行时快照（全量视图，不做窗口截断）。
 
@@ -792,7 +865,12 @@ class StateGridStorage:
         monthly = account["monthly"]
         yearly = account["yearly"]
 
-        daylist = sorted(daily.values(), key=lambda x: x["day"], reverse=True)
+        # 兜底：账本中若残留占位记录（旧版本曾写入未来日期），此处不再对外暴露。
+        daylist = [
+            item
+            for item in sorted(daily.values(), key=lambda x: x["day"], reverse=True)
+            if not _is_placeholder_day(item)
+        ]
         monthlist = sorted(monthly.values(), key=lambda x: x["month"], reverse=True)
 
         yearlist = sorted(yearly.values(), key=lambda x: x["year"], reverse=True)

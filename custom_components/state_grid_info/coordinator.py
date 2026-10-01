@@ -607,7 +607,9 @@ class StateGridInfoCoordinator(DataUpdateCoordinator):
         日/月/年列表均全量返回，不做窗口截断（原 dayList 截断为最近 400 天）。
         """
         account = await self.storage.async_get_account(consumer_number)
-        day_list = sorted(account.get("daily", {}).values(), key=lambda x: x["day"], reverse=True)
+        # 占位日（晚于今天的日期、今天尚未结算的全 0 记录）不对外暴露，
+        # 与实体属性的口径保持一致。
+        day_list = await self.storage.async_get_visible_daily_list(consumer_number)
         month_list = sorted(account.get("monthly", {}).values(), key=lambda x: x["month"], reverse=True)
         year_list = sorted(account.get("yearly", {}).values(), key=lambda x: x["year"], reverse=True)
         return day_list, month_list, year_list

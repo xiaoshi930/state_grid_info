@@ -94,6 +94,11 @@ def _is_placeholder_day(item) -> bool:
     注意与 :func:`_is_day_all_zero` 的区别：后者只判数值全 0，本函数还结合了
     日期。判断"今天是否有真实数据"要看数值，因此今天必须全 0 才算占位 ——
     若数据源在当天提供了真实用电量，仍会正常保留。
+
+    本函数管不到「已过去但尚未结算」的全 0 日（如 10-02 时数据源给出的 10-01
+    仍是 0）。这类条目只能在列表层面识别（它们紧挨最新端），由
+    :func:`_visible_day_list` 统一剔除，切勿在此处按"过去 N 天"硬编码窗口 ——
+    那会误伤真实的零用电日。
     """
     if not isinstance(item, dict):
         return False
@@ -121,7 +126,8 @@ def _trim_consecutive_zero_days(day_list: list) -> list:
     - 首部连续全 0：最新端（如当月尚未到的未来日 ``2026-09-30``）连续为 0 → 删除；
     - 尾部连续全 0：最旧端（如开户前）连续为 0 → 删除。
 
-    仅在「写出文件」时应用，内存账本不受影响。
+    只影响「对外输出」（写文件与实体属性），内存账本不受影响 —— 未结算日的
+    记录仍留在账本里，等数据源补上真实数值后自动转为可见。
     """
     if not day_list:
         return day_list
@@ -138,6 +144,26 @@ def _trim_consecutive_zero_days(day_list: list) -> list:
     if lead == 0 and tail == n - 1:
         return day_list
     return day_list[lead : tail + 1]
+
+
+def _visible_day_list(records) -> list:
+    """把账本中的日记录整理成「对外可见」的列表（最新在前）。
+
+    统一三处口径：持久化文件 dayList、coordinator.data["dayList"]、
+    实体属性 daylist。三者必须完全一致，否则会出现「文件里没有、实体属性里有」
+    的鬼数据（真实踩过：数据源按整月日历推送，10-01 这种尚未结算的日子全是 0，
+    只按 :func:`_is_placeholder_day` 过滤时它不算占位日，于是写进账本并被实体属性
+    暴露，而写文件时又被 :func:`_trim_consecutive_zero_days` 干掉）。
+
+    规则：
+    1. 按 day 降序；
+    2. 剔除占位日（晚于今天 / 今天尚未结算的全 0）；
+    3. 剔除最新端（以及最旧端）连续的全 0 日 —— 未结算日通常紧邻最新端。
+    """
+    ordered = sorted(records, key=lambda x: str(x.get("day", "")), reverse=True)
+    return _trim_consecutive_zero_days(
+        [item for item in ordered if not _is_placeholder_day(item)]
+    )
 
 
 class StateGridStorage:
@@ -304,7 +330,7 @@ class StateGridStorage:
         flat["date"] = meta.get("last_payload_at", "")
         flat["balance"] = meta.get("last_balance", 0.0)
         flat["consumer_name"] = meta.get("consumer_name", "")
-        flat["dayList"] = _trim_consecutive_zero_days(day_list)
+        flat["dayList"] = _visible_day_list(day_list)
         flat["monthList"] = self._export_list(account.get("monthly", {}), _MONTH_FIELDS, "month")
         flat["yearList"] = self._export_list(account.get("yearly", {}), _YEAR_FIELDS, "year")
         flat["rechargeList"] = account.get("recharge", [])
@@ -833,16 +859,10 @@ class StateGridStorage:
         """返回可对外暴露的日数据列表（按日期降序，已剔除占位条目）。
 
         供运行时快照与 coordinator 取数共用，保证「实体属性」与「coordinator.data」
-        对占位日的口径完全一致。
+        对占位日的口径完全一致，且与持久化文件里的 dayList 逐条相同。
         """
         account = self._ensure_account(consumer_number)
-        return [
-            item
-            for item in sorted(
-                account["daily"].values(), key=lambda x: x["day"], reverse=True
-            )
-            if not _is_placeholder_day(item)
-        ]
+        return _visible_day_list(account["daily"].values())
 
     async def async_get_runtime_snapshot(self, consumer_number: str) -> dict:
         """构建 coordinator 向实体暴露的运行时快照（全量视图，不做窗口截断）。
@@ -865,12 +885,9 @@ class StateGridStorage:
         monthly = account["monthly"]
         yearly = account["yearly"]
 
-        # 兜底：账本中若残留占位记录（旧版本曾写入未来日期），此处不再对外暴露。
-        daylist = [
-            item
-            for item in sorted(daily.values(), key=lambda x: x["day"], reverse=True)
-            if not _is_placeholder_day(item)
-        ]
+        # 兜底：账本中若残留占位记录（旧版本曾写入未来日期 / 未结算日），此处不再
+        # 对外暴露。口径与持久化文件的 dayList 完全一致（_visible_day_list）。
+        daylist = _visible_day_list(daily.values())
         monthlist = sorted(monthly.values(), key=lambda x: x["month"], reverse=True)
 
         yearlist = sorted(yearly.values(), key=lambda x: x["year"], reverse=True)

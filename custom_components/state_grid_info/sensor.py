@@ -287,9 +287,18 @@ class StateGridInfoCurrentMonthCostSensor(StateGridInfoBaseSensor):
 
 
 class StateGridInfoTotalCostSensor(StateGridInfoBaseSensor):
-    """Lifetime cumulative electricity cost."""
+    """Lifetime cumulative electricity cost.
+
+    同时作为长期统计数据源：``device_class = MONETARY`` 搭配
+    ``state_class = TOTAL``（HA 中 monetary 只允许 total），Recorder 会为它
+    生成 statistics，可直接在「能源」面板 → 电网 → 成本跟踪里选择
+    「使用跟踪总成本的实体」（stat_cost）。HA 自带的 EnergyCostSensor 用的
+    也是这组属性，只是单位换成 HA 配置的货币代码。
+    """
 
     _attr_native_unit_of_measurement = "元"
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_state_class = SensorStateClass.TOTAL
 
     def __init__(self, coordinator: StateGridInfoCoordinator, config: dict[str, Any]) -> None:
         super().__init__(

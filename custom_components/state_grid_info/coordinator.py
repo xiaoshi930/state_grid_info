@@ -434,10 +434,24 @@ class StateGridInfoCoordinator(DataUpdateCoordinator):
         if not consumer_number:
             return
         try:
-            from .statistics import async_import_energy_statistics  # local import avoids circular dep
+            from .statistics import (  # local import avoids circular dep
+                async_import_cost_statistics,
+                async_import_energy_statistics,
+            )
+        except Exception as exc:
+            _LOGGER.debug("Statistics module unavailable: %s", exc)
+            return
+
+        try:
             await async_import_energy_statistics(self.hass, self.storage, consumer_number)
         except Exception as exc:
-            _LOGGER.debug("Statistics import skipped: %s", exc)
+            _LOGGER.debug("Energy statistics import skipped: %s", exc)
+
+        # 日电费回填（能源面板「成本跟踪 → 统计」的历史成本曲线）
+        try:
+            await async_import_cost_statistics(self.hass, self.storage, consumer_number)
+        except Exception as exc:
+            _LOGGER.debug("Cost statistics import skipped: %s", exc)
 
     async def _async_sync_storage(
         self,

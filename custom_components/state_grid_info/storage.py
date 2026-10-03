@@ -872,6 +872,7 @@ class StateGridStorage:
         - yearlist：全部年份，降序
         - overview 字段供 Overview Sensor 使用
         - energy/cost 字段供能源类 sensor 使用
+        - last_month_ele_cost：上月电费（当前月之前最近一个月的账单金额）
         - rechargelist：充值记录（数据源提供时）
 
         注意：此处曾把 daylist 截断为最近 70 天、monthlist 截断为最近 24 个月，
@@ -916,6 +917,14 @@ class StateGridStorage:
         total_energy = round(sum(float(m.get("monthEleNum", 0)) for m in monthly.values()), 2)
         total_cost = round(sum(float(m.get("monthEleCost", 0)) for m in monthly.values()), 2)
 
+        # 上月电费：当前月之前最近一个月的账单金额（monthlist 已按月份降序）。
+        # 预付费户号余额为 0 时，概览实体值改取该值（见 sensor.OverviewSensor）。
+        last_month_ele_cost = 0.0
+        for entry in monthlist:
+            if str(entry.get("month", "")) < current_month_str:
+                last_month_ele_cost = round(float(entry.get("monthEleCost", 0.0) or 0.0), 2)
+                break
+
         # Flag used by the coordinator to decide whether to estimate cost.
         # True only when the source explicitly provided a non-zero billed cost
         # for the current month (i.e., the month has already been settled).
@@ -928,6 +937,7 @@ class StateGridStorage:
             "consumer_number": consumer_number,
             "consumer_name": meta.get("consumer_name", ""),
             "balance": meta.get("last_balance", 0.0),
+            "last_month_ele_cost": last_month_ele_cost,
             "date": meta.get("last_payload_at", ""),
             "overview": {
                 "daylist": daylist,

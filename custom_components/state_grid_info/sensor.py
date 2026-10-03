@@ -11,7 +11,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_CONSUMER_NAME, CONF_CONSUMER_NUMBER, CONF_DATA_SOURCE, DOMAIN
+from .const import (
+    CONF_CONSUMER_NAME,
+    CONF_CONSUMER_NUMBER,
+    CONF_DATA_SOURCE,
+    CONF_IS_PREPAID,
+    DOMAIN,
+)
 from .coordinator import StateGridInfoCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -113,8 +119,19 @@ class StateGridInfoOverviewSensor(StateGridInfoBaseSensor):
 
     @property
     def native_value(self) -> float:
-        """Return the account balance."""
+        """Return the account balance.
+
+        预付费户号：当余额为 0（数据源未给出有效余额）时，取上月电费作为实体值。
+        """
         snapshot = self._snapshot()
+        balance = self._raw_balance(snapshot)
+        if balance == 0.0 and self.config.get(CONF_IS_PREPAID, False):
+            return float(snapshot.get("last_month_ele_cost", 0.0))
+        return balance
+
+    @staticmethod
+    def _raw_balance(snapshot: dict[str, Any]) -> float:
+        """Return the untouched account balance from the snapshot."""
         return float(snapshot.get("balance", 0.0))
 
     @property
@@ -145,7 +162,12 @@ class StateGridInfoOverviewSensor(StateGridInfoBaseSensor):
                         latest_date = datetime.strptime(daylist[0]["day"], "%Y-%m-%d")
                         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
                         days_since_latest = (today - latest_date).days
-                        remaining_days = max(0.0, self.native_value / avg_daily_cost - days_since_latest)
+                        # 剩余天数始终基于真实余额计算，不受预付费「取上月电费」的
+                        # 实体值替换影响。
+                        remaining_days = max(
+                            0.0,
+                            self._raw_balance(snapshot) / avg_daily_cost - days_since_latest,
+                        )
                         attrs["剩余天数"] = math.ceil(remaining_days)
                     except (KeyError, ValueError) as exc:
                         _LOGGER.debug("Failed to calculate remaining prepaid days: %s", exc)

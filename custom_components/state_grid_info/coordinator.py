@@ -23,6 +23,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import (
     BILLING_STANDARD_MONTH_阶梯,
     BILLING_STANDARD_MONTH_阶梯_峰平谷,
+    BILLING_STANDARD_MONTH_阶梯_峰平谷_变动阶梯,
     BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格,
     BILLING_STANDARD_OTHER_平均单价,
     BILLING_STANDARD_YEAR_阶梯,
@@ -53,6 +54,9 @@ from .const import (
     DATA_SOURCE_QINGLONG,
     DATA_SOURCE_STATE_GRID_APP,
     DOMAIN,
+    default_month_ladder_levels,
+    month_ladder_level_key,
+    month_valley_price_key,
 )
 from .storage import StateGridStorage
 
@@ -656,6 +660,7 @@ class StateGridInfoCoordinator(DataUpdateCoordinator):
             BILLING_STANDARD_YEAR_阶梯_峰平谷: "年阶梯峰平谷",
             BILLING_STANDARD_MONTH_阶梯: "月阶梯",
             BILLING_STANDARD_MONTH_阶梯_峰平谷: "月阶梯峰平谷",
+            BILLING_STANDARD_MONTH_阶梯_峰平谷_变动阶梯: "月阶梯峰平谷变动阶梯",
             BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格: "月阶梯峰平谷变动价格",
             BILLING_STANDARD_OTHER_平均单价: "平均单价",
         }
@@ -684,11 +689,16 @@ class StateGridInfoCoordinator(DataUpdateCoordinator):
         if billing_standard in (
             BILLING_STANDARD_MONTH_阶梯,
             BILLING_STANDARD_MONTH_阶梯_峰平谷,
+            BILLING_STANDARD_MONTH_阶梯_峰平谷_变动阶梯,
             BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格,
         ):
             accumulated = await self.async_get_month_accumulated_kwh(latest_day)
-            ladder_level_1 = self.config.get(CONF_LADDER_LEVEL_1, 180)
-            ladder_level_2 = self.config.get(CONF_LADDER_LEVEL_2, 280)
+            if billing_standard == BILLING_STANDARD_MONTH_阶梯_峰平谷_变动阶梯:
+                # 变动阶梯：档位边界随 latest_day 所在月份变化
+                ladder_level_1, ladder_level_2 = self._get_month_ladder_levels(latest_day)
+            else:
+                ladder_level_1 = self.config.get(CONF_LADDER_LEVEL_1, 180)
+                ladder_level_2 = self.config.get(CONF_LADDER_LEVEL_2, 280)
             if accumulated <= ladder_level_1:
                 current_ladder = "第1档"
             elif accumulated <= ladder_level_2:
@@ -701,6 +711,19 @@ class StateGridInfoCoordinator(DataUpdateCoordinator):
             }
 
         return {}
+
+    def _get_month_ladder_levels(self, day: str) -> tuple[float, float]:
+        """返回某一天的日期所在月份生效的第 2 / 第 3 档起始电量。
+
+        仅用于「月阶梯峰平谷变动阶梯」：每月可单独维护阶梯电量，缺省时回落到
+        该月的默认值（夏季 7-9 月为 260/460，其余月份为 180/280）。
+        """
+        month = int(day[5:7]) if len(day) >= 7 and day[5:7].isdigit() else datetime.now().month
+        default_1, default_2 = default_month_ladder_levels(month)
+        return (
+            float(self.config.get(month_ladder_level_key(month, 1), default_1)),
+            float(self.config.get(month_ladder_level_key(month, 2), default_2)),
+        )
 
     def _build_billing_config_attributes(self, billing_standard: str) -> dict[str, Any]:
         """Return billing configuration attributes for the overview sensor."""
@@ -737,10 +760,20 @@ class StateGridInfoCoordinator(DataUpdateCoordinator):
         if billing_standard in (
             BILLING_STANDARD_MONTH_阶梯,
             BILLING_STANDARD_MONTH_阶梯_峰平谷,
+            BILLING_STANDARD_MONTH_阶梯_峰平谷_变动阶梯,
             BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格,
         ):
-            attrs["月阶梯第2档起始电量"] = self.config.get(CONF_LADDER_LEVEL_1, 180)
-            attrs["月阶梯第3档起始电量"] = self.config.get(CONF_LADDER_LEVEL_2, 280)
+            variable_ladder = billing_standard == BILLING_STANDARD_MONTH_阶梯_峰平谷_变动阶梯
+            if variable_ladder:
+                # 当月生效的阶梯边界（卡片当前档位条按此展示）
+                current_day = datetime.now().strftime("%Y-%m-%d")
+                level_1, level_2 = self._get_month_ladder_levels(current_day)
+            else:
+                level_1 = self.config.get(CONF_LADDER_LEVEL_1, 180)
+                level_2 = self.config.get(CONF_LADDER_LEVEL_2, 280)
+
+            attrs["月阶梯第2档起始电量"] = level_1
+            attrs["月阶梯第3档起始电量"] = level_2
 
             if billing_standard == BILLING_STANDARD_MONTH_阶梯:
                 attrs["月阶梯第1档电价"] = self.config.get(CONF_LADDER_PRICE_1, 0.5224)
@@ -752,11 +785,23 @@ class StateGridInfoCoordinator(DataUpdateCoordinator):
             self._append_tou_price_attributes(attrs, "月阶梯", CONF_LADDER_PRICE_2, "第2档")
             self._append_tou_price_attributes(attrs, "月阶梯", CONF_LADDER_PRICE_3, "第3档")
 
-            if billing_standard == BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格:
+            if billing_standard in (
+                BILLING_STANDARD_MONTH_阶梯_峰平谷_变动阶梯,
+                BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格,
+            ):
                 for month in range(1, 13):
-                    valley_price_1 = self.config.get(f"month_{month:02d}_ladder_1_valley")
-                    valley_price_2 = self.config.get(f"month_{month:02d}_ladder_2_valley")
-                    valley_price_3 = self.config.get(f"month_{month:02d}_ladder_3_valley")
+                    if variable_ladder:
+                        default_1, default_2 = default_month_ladder_levels(month)
+                        attrs[f"{month}月阶梯第2档起始电量"] = self.config.get(
+                            month_ladder_level_key(month, 1), default_1
+                        )
+                        attrs[f"{month}月阶梯第3档起始电量"] = self.config.get(
+                            month_ladder_level_key(month, 2), default_2
+                        )
+
+                    valley_price_1 = self.config.get(month_valley_price_key(month, 1))
+                    valley_price_2 = self.config.get(month_valley_price_key(month, 2))
+                    valley_price_3 = self.config.get(month_valley_price_key(month, 3))
                     if valley_price_1 is not None:
                         attrs[f"{month}月阶梯第1档谷电价"] = valley_price_1
                     if valley_price_2 is not None:
@@ -800,6 +845,14 @@ class StateGridInfoCoordinator(DataUpdateCoordinator):
             return await self._async_calculate_tiered_cost(day_data, yearly=False, tou=False, variable_valley=False)
         if standard == BILLING_STANDARD_MONTH_阶梯_峰平谷:
             return await self._async_calculate_tiered_cost(day_data, yearly=False, tou=True, variable_valley=False)
+        if standard == BILLING_STANDARD_MONTH_阶梯_峰平谷_变动阶梯:
+            return await self._async_calculate_tiered_cost(
+                day_data,
+                yearly=False,
+                tou=True,
+                variable_valley=True,
+                variable_ladder=True,
+            )
         if standard == BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格:
             return await self._async_calculate_tiered_cost(day_data, yearly=False, tou=True, variable_valley=True)
         if standard == BILLING_STANDARD_OTHER_平均单价:
@@ -813,6 +866,7 @@ class StateGridInfoCoordinator(DataUpdateCoordinator):
         yearly: bool,
         tou: bool,
         variable_valley: bool,
+        variable_ladder: bool = False,
     ) -> float:
         """Calculate ladder cost for a single day using storage-backed accumulated kWh."""
         day_ele_num = float(day_data.get("dayEleNum", 0))
@@ -826,8 +880,12 @@ class StateGridInfoCoordinator(DataUpdateCoordinator):
             else await self.async_get_month_accumulated_kwh(day)
         )
 
-        ladder_level_1 = float(self.config.get(CONF_LADDER_LEVEL_1, 2160 if yearly else 180))
-        ladder_level_2 = float(self.config.get(CONF_LADDER_LEVEL_2, 4200 if yearly else 280))
+        if variable_ladder:
+            # 变动阶梯：档位边界由该日所在月份决定
+            ladder_level_1, ladder_level_2 = self._get_month_ladder_levels(day)
+        else:
+            ladder_level_1 = float(self.config.get(CONF_LADDER_LEVEL_1, 2160 if yearly else 180))
+            ladder_level_2 = float(self.config.get(CONF_LADDER_LEVEL_2, 4200 if yearly else 280))
         first_part, second_part, third_part = self._split_ladder_usage(
             day_ele_num,
             accumulated,
@@ -894,7 +952,7 @@ class StateGridInfoCoordinator(DataUpdateCoordinator):
         if variable_valley:
             suffix = ladder_key.rsplit("_", 1)[-1]
             prices[CONF_PRICE_VALLEY] = float(
-                self.config.get(f"month_{month:02d}_ladder_{suffix}_valley", prices[CONF_PRICE_VALLEY])
+                self.config.get(month_valley_price_key(month, int(suffix)), prices[CONF_PRICE_VALLEY])
             )
         return prices
 

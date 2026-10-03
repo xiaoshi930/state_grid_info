@@ -17,6 +17,7 @@ from .const import (
     BILLING_STANDARD_OPTIONS, BILLING_STANDARD_NAMES,
     BILLING_STANDARD_YEAR_阶梯, BILLING_STANDARD_YEAR_阶梯_峰平谷,
     BILLING_STANDARD_MONTH_阶梯, BILLING_STANDARD_MONTH_阶梯_峰平谷,
+    BILLING_STANDARD_MONTH_阶梯_峰平谷_变动阶梯,
     BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格, BILLING_STANDARD_OTHER_平均单价,
     CONF_DATA_SOURCE, CONF_BILLING_STANDARD,
     CONF_CONSUMER_NUMBER, CONF_CONSUMER_NUMBER_INDEX, CONF_CONSUMER_NAME,
@@ -26,9 +27,50 @@ from .const import (
     CONF_YEAR_LADDER_START,
     CONF_PRICE_PEAK, CONF_PRICE_FLAT, CONF_PRICE_VALLEY, CONF_PRICE_TIP,
     CONF_MONTH_PRICES, CONF_AVERAGE_PRICE, CONF_IS_PREPAID,
+    default_month_ladder_levels, default_month_valley_prices,
+    month_ladder_level_key, month_valley_price_key,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def build_variable_ladder_schema(existing_data: dict) -> dict:
+    """构造「月阶梯峰平谷变动阶梯」的表单字段。
+
+    与「月阶梯峰平谷变动价格」一致：全年尖/峰/平单价固定，1-12 月各自维护三档谷电价；
+    额外要求每个月单独维护阶梯电量（第 2 档 / 第 3 档起始电量）。
+    """
+    existing_data = existing_data or {}
+    schema: dict = {}
+
+    def _required(key: str, default):
+        schema[vol.Required(key, default=existing_data.get(key, default))] = cv.positive_float
+
+    # 全年第一阶梯单价（尖/峰/平，谷按月份单独配置）
+    _required(f"{CONF_LADDER_PRICE_1}_{CONF_PRICE_TIP}", 0.5224)
+    _required(f"{CONF_LADDER_PRICE_1}_{CONF_PRICE_PEAK}", 0.5224)
+    _required(f"{CONF_LADDER_PRICE_1}_{CONF_PRICE_FLAT}", 0.5224)
+    # 全年第二阶梯单价
+    _required(f"{CONF_LADDER_PRICE_2}_{CONF_PRICE_TIP}", 0.6224)
+    _required(f"{CONF_LADDER_PRICE_2}_{CONF_PRICE_PEAK}", 0.6224)
+    _required(f"{CONF_LADDER_PRICE_2}_{CONF_PRICE_FLAT}", 0.6224)
+    # 全年第三阶梯单价
+    _required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_TIP}", 0.8224)
+    _required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_PEAK}", 0.8224)
+    _required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_FLAT}", 0.8224)
+
+    # 每月：第 2 / 第 3 档起始电量 + 三档谷电价
+    for month in range(1, 13):
+        level_1_default, level_2_default = default_month_ladder_levels(month)
+        _required(month_ladder_level_key(month, 1), level_1_default)
+        _required(month_ladder_level_key(month, 2), level_2_default)
+
+        valley_1, valley_2, valley_3 = default_month_valley_prices(month)
+        _required(month_valley_price_key(month, 1), valley_1)
+        _required(month_valley_price_key(month, 2), valley_2)
+        _required(month_valley_price_key(month, 3), valley_3)
+
+    return schema
 
 class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for State Grid Info."""
@@ -351,6 +393,12 @@ class StateGridInfoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_FLAT}", default=existing_data.get(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_FLAT}", 0.3)): cv.positive_float,
                 vol.Required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_VALLEY}", default=existing_data.get(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_VALLEY}", 0.5)): cv.positive_float,
             }
+        # 月阶梯峰平谷_变动阶梯（在变动价格的基础上，每月单独维护阶梯电量）
+        elif current_standard == BILLING_STANDARD_MONTH_阶梯_峰平谷_变动阶梯:
+            schema = {
+                vol.Optional(CONF_IS_PREPAID, default=existing_data.get(CONF_IS_PREPAID, False)): cv.boolean,  # 是否预付费
+            }
+            schema.update(build_variable_ladder_schema(existing_data))
         # 月阶梯峰平谷_变动价格
         elif current_standard == BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格:
             # 为12个月的3个阶梯的谷电价创建36个输入字段
@@ -758,6 +806,12 @@ class StateGridInfoOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_FLAT}", default=existing_data.get(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_FLAT}", 0.3)): cv.positive_float,
                 vol.Required(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_VALLEY}", default=existing_data.get(f"{CONF_LADDER_PRICE_3}_{CONF_PRICE_VALLEY}", 0.5)): cv.positive_float,
             }
+        # 月阶梯峰平谷_变动阶梯（在变动价格的基础上，每月单独维护阶梯电量）
+        elif current_standard == BILLING_STANDARD_MONTH_阶梯_峰平谷_变动阶梯:
+            schema = {
+                vol.Optional(CONF_IS_PREPAID, default=existing_data.get(CONF_IS_PREPAID, False)): cv.boolean,
+            }
+            schema.update(build_variable_ladder_schema(existing_data))
         # 月阶梯峰平谷_变动价格
         elif current_standard == BILLING_STANDARD_MONTH_阶梯_峰平谷_变动价格:
             schema = {

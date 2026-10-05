@@ -235,13 +235,68 @@ class StateGridStorage:
         await self._hass.async_add_executor_job(self._save_sync)
 
     def _save_sync(self) -> None:
-        flat = self._account_to_flat(self._ensure_account(self._consumer_number))
+        account = self._ensure_account(self._consumer_number)
+
+        # 落盘前先把「文件里有、内存账本里没有」的日记录并回内存，再重建月/年汇总。
+        #
+        # 背景：本 JSON 由集成整份覆写（定时刷新、卸载/重载、新数据到达时都会 save）。
+        # 若外部直接往文件里补写历史日数据（脚本回填），内存里的账本还是旧的一份，
+        # 下一次 save 就会把补写内容整段抹掉 —— 表现为「一重载集成，补的历史就没了」。
+        # 卸载流程 async_unload() 里的那次 save 尤其致命：它在重载的读取动作之前执行。
+        # 这里的合并沿用 _merge_day_record 的优先级，只增不删，符合本文件
+        # 「日数据全量保留、不静默丢数据」的口径。
+        if self._merge_disk_daily_records(account):
+            self._rebuild_monthly_sync(account)
+            self._rebuild_yearly_sync(account)
+
+        flat = self._account_to_flat(account)
         try:
             with open(self._file_path, "w", encoding="utf-8") as f:
                 json.dump(flat, f, ensure_ascii=False, indent=2)
             _LOGGER.debug("已保存持久化数据: %s", self._file_path)
         except OSError as ex:
             _LOGGER.error("保存持久化数据失败: %s", ex)
+
+    def _merge_disk_daily_records(self, account: dict[str, Any]) -> bool:
+        """把持久化文件中内存账本还不认识的日记录合并进内存，返回是否有变化。
+
+        只做「新增日」与「同日择优」，不会删除内存中的任何记录；读取失败时
+        直接放弃合并（宁可按原样保存，也不冒风险污染账本）。
+        """
+        try:
+            if not os.path.exists(self._file_path):
+                return False
+            with open(self._file_path, "r", encoding="utf-8") as f:
+                raw = json.load(f) or {}
+        except (json.JSONDecodeError, OSError) as ex:
+            _LOGGER.warning("保存前读取持久化数据失败，跳过磁盘合并: %s", ex)
+            return False
+
+        if not isinstance(raw, dict):
+            return False
+
+        disk_daily = self._account_from_flat(raw).get("daily") or {}
+        daily = account["daily"]
+        changed = False
+
+        for day, disk_rec in disk_daily.items():
+            existing = daily.get(day)
+            if existing is None:
+                daily[day] = disk_rec
+                changed = True
+                continue
+            merged = self._merge_day_record(existing, disk_rec)
+            if merged is not existing:
+                daily[day] = merged
+                changed = True
+
+        if changed:
+            _LOGGER.info(
+                "保存前合并了持久化文件中的历史日记录（户号 %s，合并后共 %d 天）",
+                self._consumer_number,
+                len(daily),
+            )
+        return changed
 
     # ------------------------------------------------------------------
     # 扁平格式 <-> 三级账本
@@ -635,7 +690,10 @@ class StateGridStorage:
 
     async def async_rebuild_monthly(self, consumer_number: str) -> None:
         """从日数据重建月汇总（全量重算）。"""
-        account = self._ensure_account(consumer_number)
+        self._rebuild_monthly_sync(self._ensure_account(consumer_number))
+
+    def _rebuild_monthly_sync(self, account: dict[str, Any]) -> None:
+        """从日数据重建月汇总（全量重算），同步版本供保存流程复用。"""
         daily = account["daily"]
         calculated_monthly: dict[str, dict] = {}
 
@@ -690,7 +748,10 @@ class StateGridStorage:
 
     async def async_rebuild_yearly(self, consumer_number: str) -> None:
         """从月汇总重建年汇总（全量重算）。"""
-        account = self._ensure_account(consumer_number)
+        self._rebuild_yearly_sync(self._ensure_account(consumer_number))
+
+    def _rebuild_yearly_sync(self, account: dict[str, Any]) -> None:
+        """从月汇总重建年汇总（全量重算），同步版本供保存流程复用。"""
         monthly = account["monthly"]
         calculated_yearly: dict[str, dict] = {}
 
